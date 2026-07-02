@@ -1666,9 +1666,22 @@ async function processGmsExportJob(downloadId, params, userId) {
     });
 
     const sheetHeaders = columnDef.map(c => c.label);
-    const sheetRows = matrixRows.map(row => columnDef.map(c => c.getValue(row)));
 
-    await updateDownloadStatus(pool, downloadId, 'processing', 75);
+    // Generate rows with progress tracking
+    await updateDownloadStatus(pool, downloadId, 'processing', 70);
+    const sheetRows = [];
+    for (let i = 0; i < matrixRows.length; i++) {
+        try {
+            sheetRows.push(columnDef.map(c => c.getValue(matrixRows[i])));
+        } catch (rowErr) {
+            console.warn(`Row ${i} generation failed:`, rowErr.message);
+            sheetRows.push(columnDef.map(() => '-'));
+        }
+        if (i % 5000 === 0 && i > 0) {
+            const p = Math.min(75, 70 + Math.round(i / matrixRows.length * 5));
+            await updateDownloadStatus(pool, downloadId, 'processing', p);
+        }
+    }
 
     // Use the filename already stored in the DB record to keep them consistent
     const gmsFileResult = await pool.request()
@@ -1691,45 +1704,57 @@ async function processGmsExportJob(downloadId, params, userId) {
         for (let i = 0; i < sheetRows.length; i += ROW_CHUNK) {
             const rowChunk = sheetRows.slice(i, i + ROW_CHUNK);
             rowChunk.forEach(rowArr => worksheet.addRow(rowArr));
-            const rowProgress = Math.min(95, 75 + Math.round((i + rowChunk.length) / sheetRows.length * 20));
+            const rowProgress = Math.min(85, 75 + Math.round((i + rowChunk.length) / sheetRows.length * 10));
             await updateDownloadStatus(pool, downloadId, 'processing', rowProgress);
         }
 
+        // Style header row only
         const headerRow = worksheet.getRow(1);
         headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-        headerRow.fill = {
-            type: 'pattern',
-            pattern: 'solid',
-            fgColor: { argb: 'FF1E293B' }
-        };
+        headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } };
         headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
         headerRow.height = 24;
 
-        const borderStyle = {
-            top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
-            left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
-            bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
-            right: { style: 'thin', color: { argb: 'FFE2E8F0' } }
-        };
-        worksheet.eachRow((row, rowNumber) => {
-            if (rowNumber > 1) {
-                row.eachCell(cell => {
-                    cell.border = borderStyle;
-                });
-            }
-        });
+        // Apply borders only for small datasets (< 10K rows) to avoid timeout
+        if (sheetRows.length < 10000) {
+            const borderStyle = {
+                top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+                left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+                bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+                right: { style: 'thin', color: { argb: 'FFE2E8F0' } }
+            };
+            worksheet.eachRow((row, rowNumber) => {
+                if (rowNumber > 1) {
+                    row.eachCell(cell => { cell.border = borderStyle; });
+                }
+            });
+        }
     }
 
-    // Write workbook to buffer then to file for guaranteed integrity
-    let buffer;
+    await updateDownloadStatus(pool, downloadId, 'processing', 90);
+
+    // Write workbook — streaming for any size
+    const tempFile = filePath + '.tmp';
     try {
-        buffer = await workbook.xlsx.writeBuffer();
-    } catch (writeError) {
-        console.error(`Excel writeBuffer failed for ${downloadId}:`, writeError.message);
-        throw new Error(`Excel generation failed: ${writeError.message}`);
+        await workbook.xlsx.writeFile(tempFile);
+        fs.copyFileSync(tempFile, filePath);
+        try { fs.unlinkSync(tempFile); } catch {}
+    } catch (writeErr) {
+        // Fallback: writeBuffer
+        console.warn(`writeFile failed for ${downloadId}, trying writeBuffer:`, writeErr.message);
+        try {
+            const buffer = await workbook.xlsx.writeBuffer();
+            fs.writeFileSync(filePath, buffer);
+        } catch (bufErr) {
+            throw new Error(`Excel generation failed: ${bufErr.message}`);
+        }
     }
-    
-    fs.writeFileSync(filePath, buffer);
+
+    // Verify file exists and has content
+    if (!fs.existsSync(filePath) || fs.statSync(filePath).size === 0) {
+        throw new Error('Export file is empty or missing after write');
+    }
+
     const stats = fs.statSync(filePath);
 
     // Update download record as completed

@@ -450,6 +450,7 @@ export default function GmsTrackerPage() {
             asins: new Set(),
             brands: new Set(),
             storeCodes: new Set(),
+            orderedUnits: 0,
             dailyRev: {},
             weeklyRev: {},
             monthlyRev: {}
@@ -459,6 +460,7 @@ export default function GmsTrackerPage() {
         if (d.asin) s.asins.add(d.asin);
         if (d.brand) s.brands.add(d.brand);
         if (d.storeCode) s.storeCodes.add(d.storeCode);
+        s.orderedUnits += d.orderedUnits || 0;
 
         const dObj = dayjs(d.date);
         const dateStr = d.date;
@@ -527,6 +529,15 @@ export default function GmsTrackerPage() {
           width: 90,
           render: (_text, record) => record.storeCodesList && record.storeCodesList.length > 0 ? record.storeCodesList.join(', ') : '-',
           sorter: (a, b) => (a.storeCode || '').localeCompare(b.storeCode || '')
+        },
+        {
+          title: 'Orders',
+          dataIndex: 'orderedUnits',
+          key: 'orderedUnits',
+          width: 80,
+          align: 'center',
+          render: (v) => <Text style={{ fontSize: 11, fontWeight: 600, color: '#0288D1' }}>{(v || 0).toLocaleString()}</Text>,
+          sorter: (a, b) => (a.orderedUnits || 0) - (b.orderedUnits || 0)
         }
       ];
     } else {
@@ -541,11 +552,13 @@ export default function GmsTrackerPage() {
             dbBrand: d.resolvedDbBrand || '-',
             brand: d.brand || 'Generic',
             storeCode: d.storeCode || 'IN',
+            orderedUnits: 0,
             dailyRev: {},
             weeklyRev: {},
             monthlyRev: {}
           };
         }
+        asinsMap[d.asin].orderedUnits += d.orderedUnits || 0;
 
         const dObj = dayjs(d.date);
         const dateStr = d.date;
@@ -597,6 +610,15 @@ export default function GmsTrackerPage() {
           key: 'storeCode',
           width: 90,
           sorter: (a, b) => (a.storeCode || '').localeCompare(b.storeCode || '')
+        },
+        {
+          title: 'Orders',
+          dataIndex: 'orderedUnits',
+          key: 'orderedUnits',
+          width: 80,
+          align: 'center',
+          render: (v) => <Text style={{ fontSize: 11, fontWeight: 600, color: '#0288D1' }}>{(v || 0).toLocaleString()}</Text>,
+          sorter: (a, b) => (a.orderedUnits || 0) - (b.orderedUnits || 0)
         }
       ];
     }
@@ -657,8 +679,8 @@ export default function GmsTrackerPage() {
       };
 
       const monthTitle = (
-        <span className="gms-col-month" onClick={toggleMonth}>
-          <span className="gms-col-toggle">
+        <span className="gms-col-month" onClick={toggleMonth} style={{ cursor: 'pointer' }}>
+          <span className="gms-col-toggle" style={{ cursor: 'pointer' }}>
             {isMonthExpanded ? '▼' : '▶'}
           </span>
           {month.label}
@@ -700,7 +722,7 @@ export default function GmsTrackerPage() {
 
       // Expanded Month: build week sub-columns
       const weekCols = Object.values(month.weeks).map(week => {
-        const isWeekExpanded = expandedWeeks[week.key] !== false; // default to expanded
+        const isWeekExpanded = expandedWeeks[week.key] === true; // default to collapsed
 
         const toggleWeek = (e) => {
           e.stopPropagation();
@@ -708,8 +730,8 @@ export default function GmsTrackerPage() {
         };
 
         const weekTitle = (
-          <span className="gms-col-week" onClick={toggleWeek}>
-            <span className="gms-col-week-toggle">
+          <span className="gms-col-week" onClick={toggleWeek} style={{ cursor: 'pointer' }}>
+            <span className="gms-col-week-toggle" style={{ cursor: 'pointer' }}>
               {isWeekExpanded ? '▼' : '▶'}
             </span>
             {week.label}
@@ -883,60 +905,54 @@ export default function GmsTrackerPage() {
     return [...fixedCols, ...dynamicCols];
   }, [fixedCols, monthGroups, expandedMonths, expandedWeeks]);
 
-  // Chart configuration
+  // Chart configuration — Area chart: Revenue + Orders + Returns
   const chartSeries = useMemo(() => {
     const dailyData = {};
+    const dailyOrders = {};
+    const dailyReturns = {};
     filteredData.forEach(d => {
-      if (!dailyData[d.date]) dailyData[d.date] = 0;
+      if (!dailyData[d.date]) { dailyData[d.date] = 0; dailyOrders[d.date] = 0; dailyReturns[d.date] = 0; }
       dailyData[d.date] += d.orderedRevenue;
+      dailyOrders[d.date] += d.orderedUnits || 0;
+      dailyReturns[d.date] += d.customerReturns || 0;
     });
 
-    // Round values to integers
     Object.keys(dailyData).forEach(k => {
       dailyData[k] = Math.round(dailyData[k]);
+      dailyOrders[k] = Math.round(dailyOrders[k]);
+      dailyReturns[k] = Math.round(dailyReturns[k]);
     });
 
     const sortedDates = Object.keys(dailyData).sort((a, b) => String(a).localeCompare(String(b)));
-    const palette = ['#D32F2F', '#0288D1', '#2E7D32', '#ED6C02', '#9C27B0', '#9C27B0', '#0288D1', '#ED6C02'];
-    const barColors = sortedDates.map((_, i) => palette[i % palette.length]);
     return {
       options: {
-        chart: {
-          id: 'gms-revenue-trend',
-          toolbar: { show: false },
-          sparkline: { enabled: false }
-        },
-        colors: barColors,
+        chart: { id: 'gms-revenue-trend', type: 'area', toolbar: { show: true }, zoom: { enabled: true }, sparkline: { enabled: false } },
+        colors: ['#2563eb', '#16a34a', '#dc2626'],
+        stroke: { width: [2, 2, 1.5], curve: 'smooth', dashArray: [0, 0, 4] },
+        fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.3, opacityTo: 0.02, stops: [0, 90, 100] } },
         dataLabels: { enabled: false },
-        stroke: { show: false },
-        plotOptions: { bar: { columnWidth: '50%', borderRadius: 4, distributed: true } },
+        markers: { size: 2, strokeWidth: 1, hover: { size: 5 } },
         xaxis: {
           categories: sortedDates.map(d => dayjs(d).format('DD MMM')),
           labels: { style: { colors: '#64748b', fontSize: '10px', fontWeight: 600 } },
-          axisBorder: { show: false }, axisTicks: { show: false }
+          axisBorder: { show: false }, axisTicks: { show: false },
+          tickAmount: Math.min(sortedDates.length, 10)
         },
-        yaxis: {
-          labels: {
-            formatter: (val) => `₹${val >= 100000 ? (val / 100000).toFixed(1) + 'L' : val >= 1000 ? (val / 1000).toFixed(0) + 'k' : val}`,
-            style: { colors: '#64748b', fontSize: '10px' }
-          }
-        },
-        tooltip: {
-          enabled: true,
-          theme: 'light',
-          y: { formatter: (val) => `₹${Math.round(val).toLocaleString('en-IN')}` }
-        },
-        grid: {
-          borderColor: '#f1f5f9',
-          strokeDashArray: 4
-        },
-        legend: { show: false }
+        yaxis: [
+          { title: { text: 'Revenue (₹)', style: { fontSize: '10px', color: '#64748b' } },
+            labels: { formatter: (val) => `₹${val >= 100000 ? (val / 100000).toFixed(1) + 'L' : val >= 1000 ? (val / 1000).toFixed(0) + 'k' : val}`,
+            style: { colors: '#64748b', fontSize: '10px' } } },
+          { opposite: true, title: { text: 'Units', style: { fontSize: '10px', color: '#16a34a' } },
+            labels: { style: { colors: '#16a34a', fontSize: '10px' } } }
+        ],
+        tooltip: { enabled: false },
+        grid: { borderColor: '#f1f5f9', strokeDashArray: 4 },
+        legend: { position: 'top', horizontalAlign: 'right', fontSize: '11px', markers: { radius: 3 } }
       },
       series: [
-        {
-          name: 'Ordered Revenue',
-          data: sortedDates.map(d => dailyData[d])
-        }
+        { name: 'Revenue', data: sortedDates.map(d => dailyData[d]) },
+        { name: 'Orders', data: sortedDates.map(d => dailyOrders[d]) },
+        { name: 'Returns', data: sortedDates.map(d => dailyReturns[d]) }
       ]
     };
   }, [filteredData]);
@@ -1055,13 +1071,13 @@ export default function GmsTrackerPage() {
       {filteredData.length > 0 && (
         <Card style={{ borderRadius: 12, border: '1px solid #d9e6e9', marginBottom: 16 }} styles={{ body: { padding: '10px 14px' } }}>
           <div style={{ marginBottom: 8 }}>
-            <Text strong style={{ color: '#0f172a', fontSize: 13 }}>Ordered Revenue Trend Timeline</Text>
+            <Text strong style={{ color: '#0f172a', fontSize: 13 }}>Revenue · Orders · Returns Trend</Text>
           </div>
           <Chart
             options={chartSeries.options}
             series={chartSeries.series}
-            type="bar"
-            height={180}
+            type="area"
+            height={220}
           />
         </Card>
       )}
