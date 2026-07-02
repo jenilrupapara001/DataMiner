@@ -1209,11 +1209,19 @@ exports.startGmsExport = async (req, res) => {
             fileName
         });
 
-        // Run background job
-        processGmsExportJob(downloadId, req.body, userId).catch(err => {
-            console.error(`GMS Export job ${downloadId} failed:`, err);
-            updateDownloadStatus(pool, downloadId, 'failed', 0, err.message, userId).catch(console.error);
-        });
+        // Run background job with 5-minute timeout
+        const EXPORT_TIMEOUT_MS = 5 * 60 * 1000;
+        const exportTimeout = setTimeout(() => {
+            updateDownloadStatus(pool, downloadId, 'failed', 0, 'Export timed out after 5 minutes', userId).catch(console.error);
+        }, EXPORT_TIMEOUT_MS);
+
+        processGmsExportJob(downloadId, req.body, userId)
+            .then(() => clearTimeout(exportTimeout))
+            .catch(err => {
+                clearTimeout(exportTimeout);
+                console.error(`GMS Export job ${downloadId} failed:`, err);
+                updateDownloadStatus(pool, downloadId, 'failed', 0, err.message, userId).catch(console.error);
+            });
 
     } catch (error) {
         console.error('Start GMS Export Error:', error);
@@ -1713,7 +1721,14 @@ async function processGmsExportJob(downloadId, params, userId) {
     }
 
     // Write workbook to buffer then to file for guaranteed integrity
-    const buffer = await workbook.xlsx.writeBuffer();
+    let buffer;
+    try {
+        buffer = await workbook.xlsx.writeBuffer();
+    } catch (writeError) {
+        console.error(`Excel writeBuffer failed for ${downloadId}:`, writeError.message);
+        throw new Error(`Excel generation failed: ${writeError.message}`);
+    }
+    
     fs.writeFileSync(filePath, buffer);
     const stats = fs.statSync(filePath);
 
