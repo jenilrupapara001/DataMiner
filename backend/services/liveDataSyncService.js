@@ -549,15 +549,14 @@ class LiveDataSyncService extends EventEmitter {
             const currentPrice = extracted.priceAmount || 0;
             const dealBadge = extracted.dealBadge || '';
             
-            // Only PROPER Amazon deal types suppress dispute.
-            // "% off" badges, "Sale", "Ends in..." countdown banners do NOT suppress.
-            const PROPER_DEAL_PATTERN = /^(lightning|limited time deal|best deal|prime exclusive|subscribe.?and.?save|deal of the day|coupon)$/i;
-            const hasProperDeal = PROPER_DEAL_PATTERN.test(dealBadge.trim());
+            // Any deal badge present → suppress dispute (deals change prices frequently)
+            // Includes: Lightning Deal, Limited Time Deal, Prime Day, Coupon, % off, Ends in, etc.
+            const hasDeal = dealBadge && dealBadge !== 'No deal found' && dealBadge.trim().length > 0;
             
             let priceDispute = false;
             if (uploadedPrice > 0 && currentPrice > 0) {
                 const priceDiff = Math.abs(uploadedPrice - currentPrice);
-                if (!hasProperDeal && priceDiff > 5) {
+                if (!hasDeal && priceDiff > 5) {
                     priceDispute = true;
                 }
             }

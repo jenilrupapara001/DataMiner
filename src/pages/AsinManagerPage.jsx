@@ -698,6 +698,26 @@ const AsinManagerPage = (props) => {
     setAppliedSearchQuery(searchQuery);
   };
 
+  // Dynamic dispute calculation — computed at render time
+  const isDealActive = (asin) => {
+    if (!asin.dealBadge || asin.dealBadge === 'No deal found' || asin.dealBadge === '') return false;
+    if (asin.dealStartTime && asin.dealEndTime) {
+      const now = new Date();
+      return new Date(asin.dealStartTime) <= now && now <= new Date(asin.dealEndTime);
+    }
+    return false;
+  };
+
+  const computeDynamicDispute = (asin) => {
+    // If there's an active deal, no dispute
+    if (isDealActive(asin)) return false;
+    // If uploaded price and current price exist and differ > ₹5, dispute
+    const uploaded = asin.uploadedPrice || asin.UploadedPrice || 0;
+    const current = asin.currentPrice || asin.CurrentPrice || 0;
+    if (uploaded > 0 && current > 0 && Math.abs(uploaded - current) > 5) return true;
+    return false;
+  };
+
   const resetAllFilters = useCallback(() => {
     const resetState = {
       category: '', brand: '', scrapeStatus: '',
@@ -3577,8 +3597,8 @@ const AsinManagerPage = (props) => {
                         )}
                         {isVisible('dealBadge') && (
                           <td style={{ ...tdStyle, textAlign: 'center' }}>
-                            {asin.dealBadge && asin.dealBadge !== 'No deal found' && asin.dealBadge !== '' ? (
-                              <Tooltip title={asin.dealBadge} placement="top" styles={{ root: { fontSize: 11 } }}>
+                            {asin.dealBadge && asin.dealBadge !== 'No deal found' && asin.dealBadge !== '' && asin.dealStartTime && asin.dealEndTime && isDealActive(asin) ? (
+                              <Tooltip title={`${asin.dealBadge} — ${new Date(asin.dealStartTime).toLocaleDateString('en-IN')} to ${new Date(asin.dealEndTime).toLocaleDateString('en-IN')}`} placement="top" styles={{ root: { fontSize: 11 } }}>
                                 <span
                                   className="badge"
                                   style={{
@@ -3693,24 +3713,29 @@ const AsinManagerPage = (props) => {
                             onClick={(e) => handleViewPrice(asin, e)}
                             title="View Price Trend Matrix">
                             <div className="d-flex flex-column align-items-end">
-                              <>
-                                <span style={{ color: asin.priceDispute ? '#C62828' : '#16a34a' }}>
-                                  ₹{(asin.uploadedPrice || 0).toLocaleString()}
-                                </span>
-                                {asin.priceDispute && (
-                                  <span className="badge mt-1 shadow-sm" style={{
-                                    fontSize: '8px',
-                                    padding: '2px 6px',
-                                    fontWeight: 800,
-                                    backgroundColor: '#C62828',
-                                    color: '#fff',
-                                    borderRadius: '4px',
-                                    textTransform: 'uppercase'
-                                  }}>
-                                    PRICE DISPUTE
-                                  </span>
-                                )}
-                              </>
+                              {(() => {
+                                const isDisputed = computeDynamicDispute(asin);
+                                return (
+                                  <>
+                                    <span style={{ color: isDisputed ? '#C62828' : '#16a34a' }}>
+                                      ₹{(asin.uploadedPrice || 0).toLocaleString()}
+                                    </span>
+                                    {isDisputed && (
+                                      <span className="badge mt-1 shadow-sm" style={{
+                                        fontSize: '8px',
+                                        padding: '2px 6px',
+                                        fontWeight: 800,
+                                        backgroundColor: '#C62828',
+                                        color: '#fff',
+                                        borderRadius: '4px',
+                                        textTransform: 'uppercase'
+                                      }}>
+                                        PRICE DISPUTE
+                                      </span>
+                                    )}
+                                  </>
+                                );
+                              })()}
                             </div>
                           </td>
                         )}
@@ -3723,17 +3748,22 @@ const AsinManagerPage = (props) => {
                         )}
                         {isVisible('priceDispute') && (
                           <td style={{ ...tdStyle, textAlign: 'center' }}>
-                            <Tooltip title={asin.priceDispute ? 'Channel price differs from current price by >₹5' : 'No price dispute'} placement="top" styles={{ root: { fontSize: 11 } }}>
-                              <span className="badge" style={{
-                                backgroundColor: asin.priceDispute ? '#fef2f2' : '#ecfdf5',
-                                color: asin.priceDispute ? '#C62828' : '#2E7D32',
-                                border: `1px solid ${asin.priceDispute ? '#fecaca' : '#a7f3d0'}`,
-                                fontWeight: 600, fontSize: '0.65rem', padding: '2px 6px', borderRadius: '4px',
-                                cursor: 'default'
-                              }}>
-                                {asin.priceDispute ? 'DISPUTED' : 'No Dispute'}
-                              </span>
-                            </Tooltip>
+                            {(() => {
+                              const isDisputed = computeDynamicDispute(asin);
+                              return (
+                                <Tooltip title={isDisputed ? 'Channel price differs from current price by >₹5' : 'No price dispute'} placement="top" styles={{ root: { fontSize: 11 } }}>
+                                  <span className="badge" style={{
+                                    backgroundColor: isDisputed ? '#fef2f2' : '#ecfdf5',
+                                    color: isDisputed ? '#C62828' : '#2E7D32',
+                                    border: `1px solid ${isDisputed ? '#fecaca' : '#a7f3d0'}`,
+                                    fontWeight: 600, fontSize: '0.65rem', padding: '2px 6px', borderRadius: '4px',
+                                    cursor: 'default'
+                                  }}>
+                                    {isDisputed ? 'DISPUTED' : 'No Dispute'}
+                                  </span>
+                                </Tooltip>
+                              );
+                            })()}
                           </td>
                         )}
                         {isVisible('priceTrend') && historyStructure.map(week => (
