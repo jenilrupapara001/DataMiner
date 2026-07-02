@@ -1,9 +1,14 @@
 /**
  * RetailOps Partner — API Client
  *
- * HTTP client with retry logic, error handling, and token management.
+ * Custom fetch-based HTTP client with:
+ *  - Promise.race() timeout  (avoids whatwg-fetch AbortController bug in RN)
+ *  - Token injection
+ *  - Structured error handling
+ *  - Optional retry logic
  */
 
+import * as SecureStore from 'expo-secure-store';
 import { API_CONFIG } from './config';
 
 // ============================================================
@@ -21,29 +26,9 @@ interface ApiResponse<T = unknown> {
 interface RequestOptions extends RequestInit {
   timeout?: number;
   retries?: number;
+  /** Pass true for endpoints that must NOT send an Authorization header (e.g. login, OTP). */
   skipAuth?: boolean;
 }
-
-// ============================================================
-// TOKEN STORAGE (will be replaced with SecureStore in production)
-// ============================================================
-
-let accessToken: string | null = null;
-let refreshToken: string | null = null;
-
-export const tokenManager = {
-  getAccessToken: () => accessToken,
-  getRefreshToken: () => refreshToken,
-  setTokens: (access: string, refresh: string) => {
-    accessToken = access;
-    refreshToken = refresh;
-  },
-  clearTokens: () => {
-    accessToken = null;
-    refreshToken = null;
-  },
-  isAuthenticated: () => !!accessToken,
-};
 
 // ============================================================
 // CUSTOM ERROR CLASS
@@ -62,6 +47,51 @@ export class ApiError extends Error {
 }
 
 // ============================================================
+// TOKEN STORAGE
+// In-memory for dev; screens that need persistence use SecureStore directly.
+// ============================================================
+
+let accessToken: string | null = null;
+let refreshToken: string | null = null;
+
+const TOKEN_KEYS = {
+  ACCESS: 'retailops_access_token',
+  REFRESH: 'retailops_refresh_token',
+} as const;
+
+export const tokenManager = {
+  getAccessToken: () => accessToken,
+  getRefreshToken: () => refreshToken,
+  setTokens: async (access: string, refresh: string) => {
+    accessToken = access;
+    refreshToken = refresh;
+    await SecureStore.setItemAsync(TOKEN_KEYS.ACCESS, access);
+    await SecureStore.setItemAsync(TOKEN_KEYS.REFRESH, refresh);
+  },
+  clearTokens: async () => {
+    accessToken = null;
+    refreshToken = null;
+    await SecureStore.deleteItemAsync(TOKEN_KEYS.ACCESS);
+    await SecureStore.deleteItemAsync(TOKEN_KEYS.REFRESH);
+  },
+  isAuthenticated: () => !!accessToken,
+  loadTokens: async (): Promise<boolean> => {
+    try {
+      const storedAccess = await SecureStore.getItemAsync(TOKEN_KEYS.ACCESS);
+      const storedRefresh = await SecureStore.getItemAsync(TOKEN_KEYS.REFRESH);
+      if (storedAccess && storedRefresh) {
+        accessToken = storedAccess;
+        refreshToken = storedRefresh;
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  },
+};
+
+// ============================================================
 // API CLIENT
 // ============================================================
 
@@ -72,12 +102,7 @@ class ApiClient {
   constructor(baseUrl: string, timeout: number) {
     this.baseUrl = baseUrl;
     this.defaultTimeout = timeout;
-
-    // Log config once on init so you can verify it in Metro
-    console.log('[API] Initialized', {
-      baseUrl,
-      timeoutMs: timeout,
-    });
+    console.log('[API] Initialized', { baseUrl, timeoutMs: timeout });
   }
 
   private async request<T>(
@@ -92,9 +117,9 @@ class ApiClient {
     } = options;
 
     const url = `${this.baseUrl}${endpoint}`;
-    const method = fetchOptions.method || 'GET';
+    const method = (fetchOptions.method || 'GET').toUpperCase();
 
-    // ── Build headers ──────────────────────────────
+    // ── Build headers ────────────────────────────────────────
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       Accept: 'application/json',
@@ -108,30 +133,40 @@ class ApiClient {
       }
     }
 
-    // ── Timeout / abort setup ──────────────────────
-    const controller = new AbortController();
-    let didTimeout = false;
-
-    const timeoutId = setTimeout(() => {
-      didTimeout = true;
-      controller.abort();
-    }, timeout);
-
     const startTime = Date.now();
-    console.log(`[API] → ${method} ${url} (timeout: ${timeout}ms)`);
+    console.log(`[API] → ${method} ${url}`);
+
+    // ── Timeout via Promise.race (NOT AbortController) ───────
+    // whatwg-fetch v3.x (used by React Native 0.81) has a bug where passing a
+    // signal causes xhr.onabort to fire on connection errors instead of
+    // xhr.onerror, producing a spurious AbortError before any response arrives.
+    // Using Promise.race avoids the polyfill's signal path entirely.
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(
+        () =>
+          reject(
+            new ApiError(
+              `Request timed out after ${Math.round(timeout / 1000)}s. Please check your connection.`,
+              408
+            )
+          ),
+        timeout
+      )
+    );
+
+    const fetchPromise = fetch(url, {
+      ...fetchOptions,
+      headers,
+      // ⚠️ NO `signal` — deliberately omitted to avoid whatwg-fetch AbortError bug
+    });
 
     try {
-      const response = await fetch(url, {
-        ...fetchOptions,
-        headers,
-        signal: controller.signal,
-      });
+      const response = await Promise.race([fetchPromise, timeoutPromise]);
 
-      clearTimeout(timeoutId);
       const elapsed = Date.now() - startTime;
       console.log(`[API] ← ${response.status} ${url} (${elapsed}ms)`);
 
-      // ── Parse body safely ────────────────────────
+      // ── Parse body ────────────────────────────────────────
       const contentType = response.headers.get('content-type') || '';
       let data: any = null;
 
@@ -140,10 +175,8 @@ class ApiClient {
           data = await response.json();
         } catch (parseErr) {
           console.warn('[API] Failed to parse JSON body:', parseErr);
-          data = null;
         }
       } else {
-        // Non-JSON — still try to read text for error messages
         try {
           const text = await response.text();
           data = text ? { message: text } : null;
@@ -152,78 +185,37 @@ class ApiClient {
         }
       }
 
-      // ── Handle HTTP errors ────────────────────────
+      // ── HTTP error handling ───────────────────────────────
       if (!response.ok) {
-        const errorMessage =
-          (data && (data.message || data.error)) ||
+        const msg =
+          (data?.message) ||
+          (data?.error) ||
           `Request failed with status ${response.status}`;
 
         if (response.status === 429) {
-          throw new ApiError(
-            'Too many requests. Please try again later.',
-            429,
-            data
-          );
+          throw new ApiError('Too many requests. Please try again later.', 429, data);
         }
 
         if (response.status === 401) {
           tokenManager.clearTokens();
-          throw new ApiError(
-            'Session expired. Please login again.',
-            401,
-            data
-          );
+          throw new ApiError('Session expired. Please login again.', 401, data);
         }
 
-        throw new ApiError(errorMessage, response.status, data);
+        throw new ApiError(msg, response.status, data);
       }
 
-      // If no JSON body but request was OK, return a minimal success
-      if (data === null) {
-        return { success: true } as ApiResponse<T>;
-      }
+      return data ?? ({ success: true } as ApiResponse<T>);
 
-      return data as ApiResponse<T>;
     } catch (error: any) {
-      clearTimeout(timeoutId);
       const elapsed = Date.now() - startTime;
 
-      // ── Re-throw ApiError as-is (from HTTP-error branch) ──
+      // Re-throw our own structured errors immediately
       if (error instanceof ApiError) {
-        console.error(
-          `[API] ✗ ApiError ${error.status} after ${elapsed}ms:`,
-          error.message
-        );
+        console.error(`[API] ✗ ${error.status} after ${elapsed}ms: ${error.message}`);
         throw error;
       }
 
-      // ── Detect abort (native + polyfill variants) ──
-      const isAbort =
-        error?.name === 'AbortError' ||
-        error?.code === 20 || // DOMException.ABORT_ERR
-        error?.message?.toLowerCase().includes('abort');
-
-      if (isAbort) {
-        if (didTimeout) {
-          console.error(
-            `[API] ✗ Timeout after ${elapsed}ms (limit ${timeout}ms): ${url}`
-          );
-          throw new ApiError(
-            `Request timed out after ${Math.round(
-              timeout / 1000
-            )}s. Please check your connection.`,
-            408
-          );
-        }
-
-        // Manual abort — usually from component unmount / navigation
-        console.warn(
-          `[API] ✗ Request cancelled after ${elapsed}ms: ${url}`
-        );
-        throw new ApiError('Request was cancelled.', 0);
-      }
-
-      // ── Network errors ────────────────────────────
+      // Network / fetch failures
       const msg = (error?.message || '').toLowerCase();
 
       if (
@@ -235,7 +227,7 @@ class ApiClient {
         console.error(`[API] ✗ Network error after ${elapsed}ms:`, error.message);
         throw new ApiError(
           `Cannot reach server at ${this.baseUrl}. ` +
-          `Verify the backend is running and reachable from the device/emulator.`,
+            'Verify the backend is running and reachable from the device/emulator.',
           0
         );
       }
@@ -248,65 +240,55 @@ class ApiClient {
         );
       }
 
-      // ── Retry (only for non-abort, non-ApiError failures) ──
+      // Retry logic (for transient failures only)
       if (retries > 0) {
-        console.warn(
-          `[API] Retrying (${retries} attempts left) after ${API_CONFIG.RETRY_DELAY}ms...`
-        );
-        await new Promise((resolve) =>
-          setTimeout(resolve, API_CONFIG.RETRY_DELAY)
-        );
+        console.warn(`[API] Retrying (${retries} left) after ${API_CONFIG.RETRY_DELAY}ms…`);
+        await new Promise((res) => setTimeout(res, API_CONFIG.RETRY_DELAY));
         return this.request<T>(endpoint, { ...options, retries: retries - 1 });
       }
 
-      // ── Unknown error ─────────────────────────────
-      console.error(
-        `[API] ✗ Unknown error after ${elapsed}ms:`,
-        error?.name,
-        error?.message
-      );
-      throw new ApiError(
-        error?.message || 'An unexpected error occurred.',
-        0
-      );
+      console.error(`[API] ✗ Unknown error after ${elapsed}ms:`, error?.name, error?.message);
+      throw new ApiError(error?.message || 'An unexpected error occurred.', 0);
     }
   }
 
-  async get<T>(endpoint: string, options?: RequestOptions): Promise<ApiResponse<T>> {
+  // ── Convenience methods ─────────────────────────────────────
+
+  get<T>(endpoint: string, options?: RequestOptions): Promise<ApiResponse<T>> {
     return this.request<T>(endpoint, { ...options, method: 'GET' });
   }
 
-  async post<T>(
-    endpoint: string,
-    body?: unknown,
-    options?: RequestOptions
-  ): Promise<ApiResponse<T>> {
+  post<T>(endpoint: string, body?: unknown, options?: RequestOptions): Promise<ApiResponse<T>> {
     return this.request<T>(endpoint, {
       ...options,
       method: 'POST',
-      body: body ? JSON.stringify(body) : undefined,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
     });
   }
 
-  async put<T>(
-    endpoint: string,
-    body?: unknown,
-    options?: RequestOptions
-  ): Promise<ApiResponse<T>> {
+  put<T>(endpoint: string, body?: unknown, options?: RequestOptions): Promise<ApiResponse<T>> {
     return this.request<T>(endpoint, {
       ...options,
       method: 'PUT',
-      body: body ? JSON.stringify(body) : undefined,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
     });
   }
 
-  async delete<T>(endpoint: string, options?: RequestOptions): Promise<ApiResponse<T>> {
+  patch<T>(endpoint: string, body?: unknown, options?: RequestOptions): Promise<ApiResponse<T>> {
+    return this.request<T>(endpoint, {
+      ...options,
+      method: 'PATCH',
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+  }
+
+  delete<T>(endpoint: string, options?: RequestOptions): Promise<ApiResponse<T>> {
     return this.request<T>(endpoint, { ...options, method: 'DELETE' });
   }
 }
 
 // ============================================================
-// SINGLETON INSTANCE
+// SINGLETON
 // ============================================================
 
 export const apiClient = new ApiClient(API_CONFIG.BASE_URL, API_CONFIG.TIMEOUT);

@@ -125,7 +125,7 @@ class AuthService {
 
       // If direct login (trusted device), store tokens
       if (!loginData.requiresOtp && loginData.data?.accessToken) {
-        tokenManager.setTokens(
+        await tokenManager.setTokens(
           loginData.data.accessToken,
           loginData.data.refreshToken
         );
@@ -159,7 +159,7 @@ class AuthService {
 
       // Store tokens on successful verification
       if (verifyData.data?.accessToken) {
-        tokenManager.setTokens(
+        await tokenManager.setTokens(
           verifyData.data.accessToken,
           verifyData.data.refreshToken
         );
@@ -206,12 +206,12 @@ class AuthService {
 
       const data = response as unknown as { accessToken: string; refreshToken: string };
       if (data?.accessToken) {
-        tokenManager.setTokens(data.accessToken, data.refreshToken);
+        await tokenManager.setTokens(data.accessToken, data.refreshToken);
       }
 
       return data;
     } catch (error) {
-      tokenManager.clearTokens();
+      await tokenManager.clearTokens();
       throw error;
     }
   }
@@ -225,7 +225,7 @@ class AuthService {
     } catch {
       // Ignore logout errors
     } finally {
-      tokenManager.clearTokens();
+      await tokenManager.clearTokens();
     }
   }
 

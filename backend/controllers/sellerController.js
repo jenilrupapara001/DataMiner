@@ -229,7 +229,7 @@ exports.getSellers = async (req, res) => {
 
     // Prepare paginated query with parameters
     const sqlQuery = `
-      SELECT Id as _id, Name as name, Marketplace as marketplace, SellerId as sellerId, 
+      SELECT Id as _id, Name as name, Email as email, Marketplace as marketplace, SellerId as sellerId, 
              OctoparseId as octoparseId, IsActive as status, IsPriority as isPriority, [Plan] as sellerPlan,
              ScrapeLimit as scrapeLimit, CreatedAt as createdAt, UpdatedAt as updatedAt,
              LastScrapedAt as lastScraped, LiveSyncClientId as liveSyncClientId,
@@ -362,7 +362,7 @@ exports.getSellers = async (req, res) => {
       const userRole = req.user?.role?.name || req.user?.role;
       const isGlobalUser = ['admin', 'super_admin', 'developer', 'operational_manager'].includes(userRole);
       const isManager = userRole === 'manager' || userRole === 'Brand Manager';
-      const { assignedUserIds, name, marketplace, sellerId, status, isActive, isPriority, liveSyncClientId, liveSyncClientSecret, partnerTag, liveSyncEnabled } = req.body;
+      const { assignedUserIds, name, marketplace, sellerId, status, isActive, isPriority, liveSyncClientId, liveSyncClientSecret, partnerTag, liveSyncEnabled, email } = req.body;
 
       // Resolve active status from either field
       const isActiveStatus = status === 'Active' || isActive === true || isActive === 1;
@@ -374,6 +374,7 @@ exports.getSellers = async (req, res) => {
       request
         .input('id', sql.VarChar, id)
         .input('name', sql.NVarChar, name)
+        .input('email', sql.NVarChar, email || '')
         .input('marketplace', sql.NVarChar, marketplace || 'amazon.in')
         .input('sellerId', sql.NVarChar, sellerId || null)
         .input('isActive', sql.Bit, isActiveStatus ? 1 : 0)
@@ -387,8 +388,8 @@ exports.getSellers = async (req, res) => {
         .input('liveSyncEnabled', sql.Bit, liveSyncEnabled === true || liveSyncEnabled === 1 ? 1 : 0);
 
       await request.query(`
-        INSERT INTO Sellers (Id, Name, Marketplace, SellerId, IsActive, IsPriority, OctoparseId, [Plan], ScrapeLimit, LiveSyncClientId, LiveSyncClientSecret, PartnerTag, LiveSyncEnabled, CreatedAt, UpdatedAt)
-        VALUES (@id, @name, @marketplace, @sellerId, @isActive, @isPriority, @octoparseId, @plan, @scrapeLimit, @liveSyncClientId, @liveSyncClientSecret, @partnerTag, @liveSyncEnabled, dbo.GetEnvDate(), dbo.GetEnvDate())
+        INSERT INTO Sellers (Id, Name, Email, Marketplace, SellerId, IsActive, IsPriority, OctoparseId, [Plan], ScrapeLimit, LiveSyncClientId, LiveSyncClientSecret, PartnerTag, LiveSyncEnabled, CreatedAt, UpdatedAt)
+        VALUES (@id, @name, @email, @marketplace, @sellerId, @isActive, @isPriority, @octoparseId, @plan, @scrapeLimit, @liveSyncClientId, @liveSyncClientSecret, @partnerTag, @liveSyncEnabled, dbo.GetEnvDate(), dbo.GetEnvDate())
       `);
 
       // Assign to users
@@ -453,7 +454,7 @@ exports.getSellers = async (req, res) => {
   exports.updateSeller = async (req, res) => {
     try {
       const { id } = req.params;
-      const { assignedUserIds, name, marketplace, sellerId, status, isPriority, liveSyncClientId, liveSyncClientSecret, partnerTag, liveSyncEnabled } = req.body;
+      const { assignedUserIds, name, marketplace, sellerId, status, isPriority, liveSyncClientId, liveSyncClientSecret, partnerTag, liveSyncEnabled, email } = req.body;
       const userRole = req.user?.role?.name || req.user?.role;
       const isGlobalUser = ['admin', 'super_admin', 'developer', 'operational_manager'].includes(userRole);
 
@@ -491,6 +492,8 @@ exports.getSellers = async (req, res) => {
       const finalLiveSyncClientSecret = liveSyncClientSecret === undefined ? current.LiveSyncClientSecret : (liveSyncClientSecret || null);
       const finalPartnerTag = partnerTag === undefined ? current.PartnerTag : (partnerTag || null);
 
+      const finalEmail = email !== undefined ? email : (current.Email || '');
+
       let finalLiveSyncEnabled = current.LiveSyncEnabled;
       if (liveSyncEnabled !== undefined) {
         finalLiveSyncEnabled = liveSyncEnabled === true || liveSyncEnabled === 1 ? 1 : 0;
@@ -500,6 +503,7 @@ exports.getSellers = async (req, res) => {
       request
         .input('id', sql.VarChar, id)
         .input('name', sql.NVarChar, finalName)
+        .input('email', sql.NVarChar, finalEmail)
         .input('marketplace', sql.NVarChar, finalMarketplace)
         .input('sellerId', sql.NVarChar, finalSellerId)
         .input('isActive', sql.Bit, finalIsActive)
@@ -514,7 +518,7 @@ exports.getSellers = async (req, res) => {
 
       await request.query(`
         UPDATE Sellers 
-        SET Name = @name, Marketplace = @marketplace, SellerId = @sellerId, 
+        SET Name = @name, Email = @email, Marketplace = @marketplace, SellerId = @sellerId, 
             IsActive = @isActive, IsPriority = @isPriority, OctoparseId = @octoparseId, [Plan] = @plan, 
             ScrapeLimit = @scrapeLimit, LiveSyncClientId = @liveSyncClientId, 
             LiveSyncClientSecret = @liveSyncClientSecret, PartnerTag = @partnerTag, 

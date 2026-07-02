@@ -497,9 +497,6 @@ export default function LoginScreen() {
       } else {
         setGeneralError('Network error. Please check your connection.');
       }
-      } else {
-        setGeneralError('Network error. Please check your connection.');
-      }
     } finally {
       setIsLoading(false);
     }

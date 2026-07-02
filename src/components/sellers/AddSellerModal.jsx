@@ -66,6 +66,7 @@ const AddSellerModal = memo(({
     if (initialData) {
       form.setFieldsValue({
         name: initialData.name ?? '',
+        email: initialData.email ?? initialData.Email ?? '',
         marketplace: initialData.marketplace ?? defaultMarketplace,
         sellerId: initialData.sellerId ?? '',
         isActive: initialData.isActive ?? initialData.IsActive ?? true,
@@ -205,6 +206,14 @@ const AddSellerModal = memo(({
                 maxLength={30} />
             </Form.Item>
           </div>
+
+          {/* Email */}
+          <Form.Item name="email"
+            label={<FieldLabel icon={<Globe size={13} color="#94a3b8" />} text="EMAIL" />}
+            style={{ marginBottom: 16 }}>
+            <Input placeholder="seller@example.com" type="email"
+              style={{ height: 38, borderRadius: 8, fontSize: 13 }} />
+          </Form.Item>
 
           {/* Active Status */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>

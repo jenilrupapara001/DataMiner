@@ -75,7 +75,6 @@ import {
     Palette,
 } from 'lucide-react-native';
 import { dashboardService, authService } from '@/services';
-import type { UserProfile, SellerInfo } from '@/services/dashboardService';
 
 // ============================================================
 // COLORS
@@ -689,38 +688,42 @@ export default function ProfileScreen() {
   });
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [darkModeEnabled, setDarkModeEnabled] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [signingOut, setSigningOut] = useState(false);
+  const [biometricsEnabled, setBiometricsEnabled] = useState(false);
+  const [emailAlertsEnabled, setEmailAlertsEnabled] = useState(true);
 
-  useEffect(() => {
-    const fetchProfile = async () => {
-      try {
-        const res = await dashboardService.getProfile();
-        const user = (res as any)?.data;
-        if (user) {
-          setProfile({
-            id: user.Id || user.id || '',
-            firstName: user.FirstName || user.firstName || '',
-            lastName: user.LastName || user.lastName || '',
-            email: user.Email || user.email || '',
-            phone: user.Phone || user.phone || '',
-            role: user.role?.Name || user.Role || '',
-            roleName: user.role?.DisplayName || user.RoleName || '',
-            sellers: user.sellers || [],
-            assignedSellers: user.assignedSellers || [],
-            avatar: user.Avatar || user.avatar || '',
-            createdAt: user.CreatedAt || user.createdAt || '',
-            lastLogin: user.LastSeen || user.lastSeen || '',
-          });
-        }
-      } catch (e) {
-        console.log('[PROFILE] Fetch failed:', e);
+  const fetchProfile = useCallback(async () => {
+    try {
+      const res = await dashboardService.getProfile();
+      const user = (res as any)?.data;
+      if (user) {
+        setProfile({
+          id: user.Id || user.id || '',
+          firstName: user.FirstName || user.firstName || '',
+          lastName: user.LastName || user.lastName || '',
+          email: user.Email || user.email || '',
+          phone: user.Phone || user.phone || '',
+          role: user.role?.Name || user.Role || '',
+          roleName: user.role?.DisplayName || user.RoleName || '',
+          sellers: user.sellers || [],
+          assignedSellers: user.assignedSellers || [],
+          avatar: user.Avatar || user.avatar || '',
+          createdAt: user.CreatedAt || user.createdAt || '',
+          lastLogin: user.LastSeen || user.lastSeen || '',
+        });
       }
-    };
-    fetchProfile();
+    } catch (e) {
+      console.log('[PROFILE] Fetch failed:', e);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-    useEffect(() => {
-        fetchProfile();
-    }, [fetchProfile]);
+  useEffect(() => {
+    fetchProfile();
+  }, [fetchProfile]);
 
     const onRefresh = useCallback(async () => {
         setRefreshing(true);
@@ -1018,14 +1021,13 @@ export default function ProfileScreen() {
                         value={profile.phone || 'Not set'}
                         onPress={handleEditProfile}
                     />
-                    <MenuItem
-                        icon={Building2}
-                        iconBg={C.amberSoft}
-                        iconColor={C.amber}
-                        label="Seller Account"
-                        value={profile.sellerName || 'N/A'}
-                        isLast
-                    />
+                        <MenuItem
+                            icon={Building2}
+                            iconBg={C.amberSoft}
+                            iconColor={C.amber}
+                            label="Seller Account"
+                            value={profile.sellers.length > 0 ? profile.sellers[0].Name : 'N/A'}
+                        />
                 </MenuGroup>
 
                 {/* ── Security ── */}
