@@ -124,6 +124,8 @@ export default function GmsTrackerPage() {
   const [exportCustomDates, setExportCustomDates] = useState(null);
   const [exportBrandType, setExportBrandType] = useState('current');
   const [exportCustomBrands, setExportCustomBrands] = useState([]);
+  const [exportDataType, setExportDataType] = useState('daily');
+  const [exportFileType, setExportFileType] = useState('xlsx');
   const [tablePage, setTablePage] = useState(1);
   const [tablePageSize, setTablePageSize] = useState(50);
 
@@ -231,6 +233,8 @@ export default function GmsTrackerPage() {
           : null,
         exportBrandType,
         exportCustomBrands,
+        exportDataType,
+        exportFileType,
         startDate: (exportDateType === 'current' && startDate) ? dayjs(startDate).format('YYYY-MM-DD') : null,
         endDate: (exportDateType === 'current' && endDate) ? dayjs(endDate).format('YYYY-MM-DD') : null,
         selectedBrands: resolvedSelectedBrands
@@ -1241,6 +1245,63 @@ export default function GmsTrackerPage() {
             />
           </div>
 
+          {/* Data Type */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 10.5, fontWeight: 700, color: '#1976D2', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6, letterSpacing: '0.05em' }}>
+              <span style={{ background: '#eef2ff', padding: '2px 6px', borderRadius: 4, fontSize: 9 }}>02</span>
+              DATA GRANULARITY
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+              {[
+                { key: 'daily', label: 'Daily', desc: 'Day-by-day revenue' },
+                { key: 'weekly', label: 'Weekly', desc: 'Week totals + WoW' },
+                { key: 'monthly', label: 'Monthly', desc: 'Month totals + MoM' },
+              ].map(opt => (
+                <div
+                  key={opt.key}
+                  onClick={() => setExportDataType(opt.key)}
+                  style={{
+                    padding: '8px 10px', borderRadius: 8, cursor: 'pointer',
+                    border: `1.5px solid ${exportDataType === opt.key ? '#1976D2' : '#e5e7eb'}`,
+                    background: exportDataType === opt.key ? '#eff6ff' : '#fff',
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  <div style={{ fontSize: 12, fontWeight: 600, color: exportDataType === opt.key ? '#1976D2' : '#1e293b' }}>{opt.label}</div>
+                  <div style={{ fontSize: 10, color: '#64748b' }}>{opt.desc}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* File Format */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 10.5, fontWeight: 700, color: '#1976D2', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6, letterSpacing: '0.05em' }}>
+              <span style={{ background: '#eef2ff', padding: '2px 6px', borderRadius: 4, fontSize: 9 }}>03</span>
+              FILE FORMAT
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {[
+                { key: 'xlsx', label: 'XLSX', desc: 'Excel spreadsheet' },
+                { key: 'csv', label: 'CSV', desc: 'Plain text data' },
+              ].map(opt => (
+                <div
+                  key={opt.key}
+                  onClick={() => setExportFileType(opt.key)}
+                  style={{
+                    flex: 1, padding: '8px 10px', borderRadius: 8, cursor: 'pointer', textAlign: 'center',
+                    border: `1.5px solid ${exportFileType === opt.key ? '#1976D2' : '#e5e7eb'}`,
+                    background: exportFileType === opt.key ? '#eff6ff' : '#fff',
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  <div style={{ fontSize: 12, fontWeight: 600, color: exportFileType === opt.key ? '#1976D2' : '#1e293b' }}>{opt.label}</div>
+                  <div style={{ fontSize: 10, color: '#64748b' }}>{opt.desc}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
           {/* Date Filtering Options */}
           <div style={{ marginBottom: 16 }}>
             <div style={{ fontSize: 10.5, fontWeight: 700, color: '#1976D2', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6, letterSpacing: '0.05em' }}>
@@ -1369,7 +1430,7 @@ export default function GmsTrackerPage() {
               onClick={handleExport}
               style={{ borderRadius: 8, fontWeight: 600, fontSize: 12, height: 34 }}
             >
-              Export to Excel
+              Export to {exportFileType === 'csv' ? 'CSV' : 'Excel'}
             </Button>
           </div>
         </div>

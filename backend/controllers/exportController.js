@@ -1317,6 +1317,8 @@ async function processGmsExportJob(downloadId, params, userId) {
         exportCustomDates = null,
         exportBrandType = 'all',
         exportCustomBrands = [],
+        exportDataType = 'daily',
+        exportFileType = 'xlsx',
         startDate = null,
         endDate = null,
         selectedBrands = []
@@ -1380,11 +1382,23 @@ async function processGmsExportJob(downloadId, params, userId) {
         return { ...row, date: new Date(d.getTime() - tzOffset).toISOString().split('T')[0], resolvedDbBrand: row.dbBrand || '-' };
     });
 
+    // Apply brand/seller filtering
+    let filteredData = rawGmsData;
+    if (exportBrandType === 'current' && selectedBrands.length > 0) {
+        filteredData = rawGmsData.filter(d =>
+            selectedBrands.includes(d.dbBrand) || selectedBrands.includes(d.brand) || selectedBrands.includes(d.resolvedDbBrand)
+        );
+    } else if (exportBrandType === 'custom' && exportCustomBrands.length > 0) {
+        filteredData = rawGmsData.filter(d =>
+            exportCustomBrands.includes(d.brand) || exportCustomBrands.includes(d.dbBrand) || exportCustomBrands.includes(d.resolvedDbBrand)
+        );
+    }
+
     await updateDownloadStatus(pool, downloadId, 'processing', 35);
 
-    // Build matrix map
+    // Build matrix map from filtered data
     const matrixMap = {};
-    rawGmsData.forEach(d => {
+    filteredData.forEach(d => {
         const isUnmatched = !d.resolvedDbBrand || d.resolvedDbBrand === '-';
         const key = exportLevel === 'seller' ? (!isUnmatched ? d.resolvedDbBrand : (d.brand || '-')) : d.asin;
         if (!matrixMap[key]) {
@@ -1449,20 +1463,24 @@ async function processGmsExportJob(downloadId, params, userId) {
     }
 
     Object.values(monthGroups).forEach(month => {
-        Object.values(month.weeks).forEach(week => {
-            const sortedDays = [...week.days].sort();
-            sortedDays.forEach((dayStr, idx) => {
-                columnDef.push({ label: new Date(dayStr).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }), getValue: r => r.dailyRev[dayStr] || 0 });
-                if (idx > 0) {
-                    const prevDay = sortedDays[idx - 1];
-                    columnDef.push({ label: `DoD`, getValue: r => { const p = r.dailyRev[prevDay] || 0; const c = r.dailyRev[dayStr] || 0; return !p && !c ? '-' : !p ? 'NEW' : `${(((c - p) / p) * 100).toFixed(1)}%`; } });
+        if (exportDataType === 'daily' || exportDataType === 'weekly') {
+            Object.values(month.weeks).forEach(week => {
+                if (exportDataType === 'daily') {
+                    const sortedDays = [...week.days].sort();
+                    sortedDays.forEach((dayStr) => {
+                        columnDef.push({ label: new Date(dayStr).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }), getValue: r => r.dailyRev[dayStr] || 0 });
+                    });
+                }
+                columnDef.push({ label: `${week.label} Total`, getValue: r => r.weeklyRev[week.key] || 0 });
+                if (exportDataType !== 'monthly') {
+                    columnDef.push({ label: `${week.label} WoW`, getValue: r => { const t = getGmsTrend(r, 'week', {}, exportLevel, week.key); return t === null ? '-' : `${t.toFixed(1)}%`; } });
                 }
             });
-            columnDef.push({ label: `${week.label} Total`, getValue: r => r.weeklyRev[week.key] || 0 });
-            columnDef.push({ label: `${week.label} WoW`, getValue: r => { const t = getGmsTrend(r, 'week', {}, exportLevel, week.key); return t === null ? '-' : `${t.toFixed(1)}%`; } });
-        });
+        }
         columnDef.push({ label: `${month.label} Total`, getValue: r => r.monthlyRev[month.key] || 0 });
-        columnDef.push({ label: `${month.label} MoM`, getValue: r => { const t = getGmsTrend(r, 'month', {}, exportLevel, month.key); return t === null ? '-' : `${t.toFixed(1)}%`; } });
+        if (exportDataType === 'monthly') {
+            columnDef.push({ label: `${month.label} MoM`, getValue: r => { const t = getGmsTrend(r, 'month', {}, exportLevel, month.key); return t === null ? '-' : `${t.toFixed(1)}%`; } });
+        }
     });
 
     await updateDownloadStatus(pool, downloadId, 'processing', 70);
@@ -1483,31 +1501,47 @@ async function processGmsExportJob(downloadId, params, userId) {
 
     await updateDownloadStatus(pool, downloadId, 'processing', 85);
 
-    // Get file path
+    // Get file path — use correct extension based on format
+    const fileExt = exportFileType === 'csv' ? 'csv' : 'xlsx';
     const gmsFileResult = await pool.request().input('id', sql.VarChar, downloadId)
         .query('SELECT FileName FROM Downloads WHERE Id = @id');
-    const fileName = gmsFileResult.recordset[0]?.FileName || `gms_export_${exportLevel}_${downloadId}.xlsx`;
+    const baseFileName = gmsFileResult.recordset[0]?.FileName || `gms_export_${exportLevel}_${downloadId}.xlsx`;
+    const fileName = baseFileName.replace(/\.\w+$/, `.${fileExt}`);
     const filePath = path.join(EXPORTS_DIR, `${downloadId}_${fileName}`);
 
-    // BULLETPROOF: Use xlsx library (simpler, more reliable than ExcelJS)
-    try {
-        const wb = XLSX.utils.book_new();
-        const ws = XLSX.utils.aoa_to_sheet([sheetHeaders, ...sheetRows]);
-        XLSX.utils.book_append_sheet(wb, ws, 'GMS Matrix');
-        const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' });
-        fs.writeFileSync(filePath, wbout);
-    } catch (xlsxErr) {
-        console.error(`XLSX write failed for ${downloadId}:`, xlsxErr.message);
-        // Fallback: write as CSV
+    // Generate file based on format
+    if (exportFileType === 'csv') {
+        // CSV — always fast, always works
         try {
-            const csvContent = [sheetHeaders.join(','), ...sheetRows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))].join('\n');
-            const csvPath = filePath.replace('.xlsx', '.csv');
-            fs.writeFileSync(csvPath, csvContent, 'utf8');
-            // Rename CSV to xlsx for consistency
-            fs.copyFileSync(csvPath, filePath);
-            fs.unlinkSync(csvPath);
+            const csvContent = [sheetHeaders.join(','), ...sheetRows.map(row =>
+                row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')
+            )].join('\n');
+            fs.writeFileSync(filePath, '\ufeff' + csvContent, 'utf8'); // BOM for Excel compatibility
         } catch (csvErr) {
-            throw new Error(`Export failed: ${csvErr.message}`);
+            throw new Error(`CSV export failed: ${csvErr.message}`);
+        }
+    } else {
+        // XLSX — bulletproof with fallback
+        try {
+            const wb = XLSX.utils.book_new();
+            const ws = XLSX.utils.aoa_to_sheet([sheetHeaders, ...sheetRows]);
+            XLSX.utils.book_append_sheet(wb, ws, 'GMS Matrix');
+            const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' });
+            fs.writeFileSync(filePath, wbout);
+        } catch (xlsxErr) {
+            console.error(`XLSX write failed for ${downloadId}:`, xlsxErr.message);
+            // Fallback: write as CSV then copy to xlsx path
+            try {
+                const csvContent = [sheetHeaders.join(','), ...sheetRows.map(row =>
+                    row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')
+                )].join('\n');
+                const csvPath = filePath.replace('.xlsx', '.csv');
+                fs.writeFileSync(csvPath, csvContent, 'utf8');
+                fs.copyFileSync(csvPath, filePath);
+                fs.unlinkSync(csvPath);
+            } catch (csvErr) {
+                throw new Error(`Export failed: ${csvErr.message}`);
+            }
         }
     }
 
