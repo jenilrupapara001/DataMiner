@@ -1326,24 +1326,11 @@ async function processGmsExportJob(downloadId, params, userId) {
     let user = null;
     const userResult = await pool.request()
         .input('userId', sql.VarChar, userId)
-        .query(`
-            SELECT U.*, R.Name as RoleName 
-            FROM Users U 
-            LEFT JOIN Roles R ON U.RoleId = R.Id 
-            WHERE U.Id = @userId
-        `);
-
+        .query(`SELECT U.*, R.Name as RoleName FROM Users U LEFT JOIN Roles R ON U.RoleId = R.Id WHERE U.Id = @userId`);
     if (userResult.recordset.length > 0) {
         const u = userResult.recordset[0];
-        user = {
-            id: u.Id,
-            role: u.RoleName === 'super_admin' ? 'admin' : u.RoleName,
-            assignedSellers: []
-        };
-
-        // Fetch assigned sellers
-        const sellersResult = await pool.request()
-            .input('userId', sql.VarChar, userId)
+        user = { id: u.Id, role: u.RoleName === 'super_admin' ? 'admin' : u.RoleName, assignedSellers: [] };
+        const sellersResult = await pool.request().input('userId', sql.VarChar, userId)
             .query('SELECT SellerId FROM UserSellers WHERE UserId = @userId');
         user.assignedSellers = sellersResult.recordset.map(s => s.SellerId);
     }
@@ -1355,9 +1342,8 @@ async function processGmsExportJob(downloadId, params, userId) {
 
     if (!isGlobalUser) {
         const assignedIds = user?.assignedSellers || [];
-        if (assignedIds.length === 0) {
-            whereClause += ' AND 1=0';
-        } else {
+        if (assignedIds.length === 0) { whereClause += ' AND 1=0'; }
+        else {
             const inClause = buildInClause(gmsRequest, 'gmsSeller', assignedIds);
             whereClause += ` AND a.SellerId IN (${inClause})`;
         }
@@ -1365,7 +1351,7 @@ async function processGmsExportJob(downloadId, params, userId) {
 
     await updateDownloadStatus(pool, downloadId, 'processing', 20);
 
-    // Build WHERE clause with date filtering pushed down to SQL
+    // Build date filter
     let sqlDateFilter = '';
     if (exportDateType === 'current' && startDate && endDate) {
         sqlDateFilter = `AND g.Date >= '${startDate}' AND g.Date <= '${endDate}'`;
@@ -1373,407 +1359,171 @@ async function processGmsExportJob(downloadId, params, userId) {
         sqlDateFilter = `AND g.Date >= '${exportCustomDates[0]}' AND g.Date <= '${exportCustomDates[1]}'`;
     }
 
+    // Fetch all GMS data
     const result = await gmsRequest.query(`
-      SELECT 
-        g.Date as date,
-        g.Asin as asin,
-        g.Brand as brand,
-        g.StoreCode as storeCode,
-        g.OrderedRevenue as orderedRevenue,
-        g.OrderedUnits as orderedUnits,
-        g.ShippedRevenue as shippedRevenue,
-        g.ShippedCOGS as shippedCOGS,
-        g.ShippedUnits as shippedUnits,
-        g.CustomerReturns as customerReturns,
-        s.Name as dbBrand,
-        a.Title as productTitle
+      SELECT g.Date as date, g.Asin as asin, g.Brand as brand, g.StoreCode as storeCode,
+        g.OrderedRevenue as orderedRevenue, g.OrderedUnits as orderedUnits,
+        g.ShippedRevenue as shippedRevenue, g.ShippedCOGS as shippedCOGS,
+        g.ShippedUnits as shippedUnits, g.CustomerReturns as customerReturns,
+        s.Name as dbBrand, a.Title as productTitle
       FROM GmsDailyPerformance g
       LEFT JOIN Asins a ON g.Asin = a.AsinCode
       LEFT JOIN Sellers s ON a.SellerId = s.Id
-      ${whereClause}
-      ${sqlDateFilter}
+      ${whereClause} ${sqlDateFilter}
       ORDER BY g.Date DESC
     `);
 
-    // Format dates to YYYY-MM-DD avoiding timezone issues
     const rawGmsData = result.recordset.map(row => {
         if (!row.date) return { ...row, date: null };
         const d = new Date(row.date);
         const tzOffset = d.getTimezoneOffset() * 60000;
-        const localDate = new Date(d.getTime() - tzOffset);
-        return {
-            ...row,
-            date: localDate.toISOString().split('T')[0],
-            resolvedDbBrand: row.dbBrand || '-'
-        };
-    });
-
-    // Build a fast lookup map for all raw GMS data
-    const rawGmsMap = {};
-    rawGmsData.forEach(d => {
-        const isUnmatched = !d.resolvedDbBrand || d.resolvedDbBrand === '-';
-        const entityKey = exportLevel === 'seller'
-            ? (!isUnmatched ? d.resolvedDbBrand : (d.brand || '-'))
-            : d.asin;
-
-        if (!rawGmsMap[entityKey]) {
-            rawGmsMap[entityKey] = {
-                daily: {},
-                weekly: {},
-                monthly: {}
-            };
-        }
-
-        const dObj = new Date(d.date);
-        const dateStr = d.date;
-        if (!dateStr) return;
-        const monthKey = dateStr.slice(0, 7);
-        const { year: wYear, week: wWeek } = getISOWeek(dObj);
-        const weekKey = `${wYear}-W${String(wWeek).padStart(2, '0')}`;
-
-        const entityData = rawGmsMap[entityKey];
-
-        // Daily
-        if (!entityData.daily[dateStr]) entityData.daily[dateStr] = 0;
-        entityData.daily[dateStr] += d.orderedRevenue || 0;
-
-        // Weekly
-        if (!entityData.weekly[weekKey]) entityData.weekly[weekKey] = 0;
-        entityData.weekly[weekKey] += d.orderedRevenue || 0;
-
-        // Monthly
-        if (!entityData.monthly[monthKey]) entityData.monthly[monthKey] = 0;
-        entityData.monthly[monthKey] += d.orderedRevenue || 0;
+        return { ...row, date: new Date(d.getTime() - tzOffset).toISOString().split('T')[0], resolvedDbBrand: row.dbBrand || '-' };
     });
 
     await updateDownloadStatus(pool, downloadId, 'processing', 35);
 
-    let dataToExport = rawGmsData;
-
-    // Date range filtering
-    if (exportDateType === 'current' && startDate && endDate) {
-        const sDate = new Date(startDate);
-        const eDate = new Date(endDate);
-        dataToExport = dataToExport.filter(d => {
-            const dDate = new Date(d.date);
-            return dDate >= sDate && dDate <= eDate;
-        });
-    } else if (exportDateType === 'custom' && exportCustomDates && exportCustomDates[0] && exportCustomDates[1]) {
-        const sDate = new Date(exportCustomDates[0]);
-        const eDate = new Date(exportCustomDates[1]);
-        dataToExport = dataToExport.filter(d => {
-            const dDate = new Date(d.date);
-            return dDate >= sDate && dDate <= eDate;
-        });
-    }
-
-    // Brand filtering
-    if (exportBrandType === 'current' && selectedBrands.length > 0) {
-        dataToExport = dataToExport.filter(d =>
-            selectedBrands.includes(d.brand) || selectedBrands.includes(d.dbBrand)
-        );
-    } else if (exportBrandType === 'custom' && exportCustomBrands.length > 0) {
-        dataToExport = dataToExport.filter(d =>
-            exportCustomBrands.includes(d.brand) || exportCustomBrands.includes(d.dbBrand)
-        );
-    }
-
-    if (dataToExport.length === 0) {
-        throw new Error('No GMS data found for the selected export filters.');
-    }
-
-    await updateDownloadStatus(pool, downloadId, 'processing', 50);
-
+    // Build matrix map
     const matrixMap = {};
-
-    // Process in chunks to avoid memory spikes and allow progress updates
-    const CHUNK_SIZE = 5000;
-    for (let i = 0; i < dataToExport.length; i += CHUNK_SIZE) {
-        const chunk = dataToExport.slice(i, i + CHUNK_SIZE);
-        
-        chunk.forEach(d => {
+    rawGmsData.forEach(d => {
         const isUnmatched = !d.resolvedDbBrand || d.resolvedDbBrand === '-';
-        const key = exportLevel === 'seller'
-            ? (!isUnmatched ? d.resolvedDbBrand : (d.brand || '-'))
-            : d.asin;
-
+        const key = exportLevel === 'seller' ? (!isUnmatched ? d.resolvedDbBrand : (d.brand || '-')) : d.asin;
         if (!matrixMap[key]) {
-            if (exportLevel === 'seller') {
-                matrixMap[key] = {
-                    dbBrand: key,
-                    isUnmatched: isUnmatched,
-                    asins: new Set(),
-                    brands: new Set(),
-                    storeCodes: new Set(),
-                    dailyRev: {},
-                    weeklyRev: {},
-                    monthlyRev: {}
-                };
-            } else {
-                matrixMap[key] = {
-                    asin: d.asin,
-                    productTitle: d.productTitle || '-',
-                    dbBrand: d.resolvedDbBrand || '-',
-                    brand: d.brand || 'Generic',
-                    storeCode: d.storeCode || 'IN',
-                    dailyRev: {},
-                    weeklyRev: {},
-                    monthlyRev: {}
-                };
-            }
+            matrixMap[key] = exportLevel === 'seller'
+                ? { dbBrand: key, isUnmatched, asins: new Set(), brands: new Set(), storeCodes: new Set(), dailyRev: {}, weeklyRev: {}, monthlyRev: {} }
+                : { asin: d.asin, productTitle: d.productTitle || '-', dbBrand: d.resolvedDbBrand || '-', brand: d.brand || 'Generic', storeCode: d.storeCode || 'IN', dailyRev: {}, weeklyRev: {}, monthlyRev: {} };
         }
-
         const row = matrixMap[key];
         if (exportLevel === 'seller') {
             if (d.asin) row.asins.add(d.asin);
             if (d.brand) row.brands.add(d.brand);
             if (d.storeCode) row.storeCodes.add(d.storeCode);
         }
-
-        const dObj = new Date(d.date);
-        const dateStr = d.date;
-        const monthKey = dateStr.slice(0, 7);
-        const { year: wYear, week: wWeek } = getISOWeek(dObj);
+        const monthKey = d.date.slice(0, 7);
+        const { year: wYear, week: wWeek } = getISOWeek(new Date(d.date));
         const weekKey = `${wYear}-W${String(wWeek).padStart(2, '0')}`;
-
-        // Day Revenue
-        if (!row.dailyRev[dateStr]) row.dailyRev[dateStr] = 0;
-        row.dailyRev[dateStr] += d.orderedRevenue;
-
-        // Week Revenue
+        if (!row.dailyRev[d.date]) row.dailyRev[d.date] = 0;
+        row.dailyRev[d.date] += d.orderedRevenue || 0;
         if (!row.weeklyRev[weekKey]) row.weeklyRev[weekKey] = 0;
-        row.weeklyRev[weekKey] += d.orderedRevenue;
-
-        // Month Revenue
+        row.weeklyRev[weekKey] += d.orderedRevenue || 0;
         if (!row.monthlyRev[monthKey]) row.monthlyRev[monthKey] = 0;
-        row.monthlyRev[monthKey] += d.orderedRevenue;
-        });
+        row.monthlyRev[monthKey] += d.orderedRevenue || 0;
+    });
 
-        // Update progress between chunks
-        const chunkProgress = Math.min(70, 50 + Math.round((i + chunk.length) / dataToExport.length * 20));
-        await updateDownloadStatus(pool, downloadId, 'processing', chunkProgress);
-    }
+    await updateDownloadStatus(pool, downloadId, 'processing', 50);
 
     const matrixRows = Object.values(matrixMap).map(r => {
         if (exportLevel === 'seller') {
-            return {
-                ...r,
-                asinsList: Array.from(r.asins),
-                brandsList: Array.from(r.brands),
-                storeCodesList: Array.from(r.storeCodes)
-            };
+            return { ...r, asinsList: Array.from(r.asins), brandsList: Array.from(r.brands), storeCodesList: Array.from(r.storeCodes) };
         }
         return r;
     });
 
-    const dates = [...new Set(dataToExport.map(d => d.date))].sort((a, b) => String(a).localeCompare(String(b)));
+    const dates = [...new Set(rawGmsData.map(d => d.date))].sort();
     const monthGroups = {};
-
     dates.forEach(dateStr => {
-        const dObj = new Date(dateStr);
         const monthKey = dateStr.slice(0, 7);
-        const monthLabel = dObj.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
-        const { year: wYear, week: wWeek } = getISOWeek(dObj);
+        const monthLabel = new Date(dateStr).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+        const { year: wYear, week: wWeek } = getISOWeek(new Date(dateStr));
         const weekKey = `${wYear}-W${String(wWeek).padStart(2, '0')}`;
         const weekLabel = getWeekRangeLabel(wYear, wWeek);
-
-        if (!monthGroups[monthKey]) {
-            monthGroups[monthKey] = {
-                label: monthLabel,
-                key: monthKey,
-                weeks: {}
-            };
-        }
-
-        if (!monthGroups[monthKey].weeks[weekKey]) {
-            monthGroups[monthKey].weeks[weekKey] = {
-                label: weekLabel,
-                key: weekKey,
-                days: []
-            };
-        }
-
+        if (!monthGroups[monthKey]) monthGroups[monthKey] = { label: monthLabel, key: monthKey, weeks: {} };
+        if (!monthGroups[monthKey].weeks[weekKey]) monthGroups[monthKey].weeks[weekKey] = { label: weekLabel, key: weekKey, days: [] };
         monthGroups[monthKey].weeks[weekKey].days.push(dateStr);
     });
 
-    const columnDef = [];
+    await updateDownloadStatus(pool, downloadId, 'processing', 60);
 
+    // Build column definitions
+    const columnDef = [];
     if (exportLevel === 'seller') {
-        columnDef.push({ label: 'Seller (DB)', getValue: (r) => r.dbBrand });
+        columnDef.push({ label: 'Seller (DB)', getValue: r => r.dbBrand });
         columnDef.push({ label: 'ASIN', getValue: () => '-' });
-        columnDef.push({ label: 'Brand (Sheet)', getValue: (r) => r.brandsList && r.brandsList.length > 0 ? r.brandsList.join(', ') : '-' });
-        columnDef.push({ label: 'Store Code', getValue: (r) => r.storeCodesList && r.storeCodesList.length > 0 ? r.storeCodesList.join(', ') : '-' });
+        columnDef.push({ label: 'Brand (Sheet)', getValue: r => r.brandsList?.length > 0 ? r.brandsList.join(', ') : '-' });
+        columnDef.push({ label: 'Store Code', getValue: r => r.storeCodesList?.length > 0 ? r.storeCodesList.join(', ') : '-' });
     } else {
-        columnDef.push({ label: 'Seller (DB)', getValue: (r) => r.dbBrand });
-        columnDef.push({ label: 'ASIN', getValue: (r) => r.asin });
-        columnDef.push({ label: 'Product Title', getValue: (r) => r.productTitle });
-        columnDef.push({ label: 'Brand (Sheet)', getValue: (r) => r.brand });
-        columnDef.push({ label: 'Store Code', getValue: (r) => r.storeCode });
+        columnDef.push({ label: 'Seller (DB)', getValue: r => r.dbBrand });
+        columnDef.push({ label: 'ASIN', getValue: r => r.asin });
+        columnDef.push({ label: 'Product Title', getValue: r => r.productTitle });
+        columnDef.push({ label: 'Brand (Sheet)', getValue: r => r.brand });
+        columnDef.push({ label: 'Store Code', getValue: r => r.storeCode });
     }
 
     Object.values(monthGroups).forEach(month => {
         Object.values(month.weeks).forEach(week => {
-            const sortedDays = [...week.days].sort((a, b) => String(a).localeCompare(String(b)));
+            const sortedDays = [...week.days].sort();
             sortedDays.forEach((dayStr, idx) => {
-                const formattedDayLabel = new Date(dayStr).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-                columnDef.push({
-                    label: formattedDayLabel,
-                    getValue: (r) => r.dailyRev[dayStr] || 0
-                });
-
+                columnDef.push({ label: new Date(dayStr).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }), getValue: r => r.dailyRev[dayStr] || 0 });
                 if (idx > 0) {
-                    const prevDayStr = sortedDays[idx - 1];
-                    const currDayStr = dayStr;
-                    const pDayNum = new Date(prevDayStr).getDate();
-                    const cDayNum = new Date(currDayStr).getDate();
-                    columnDef.push({
-                        label: `DoD (${pDayNum}->${cDayNum})`,
-                        getValue: (r) => {
-                            const prev = r.dailyRev[prevDayStr] || 0;
-                            const curr = r.dailyRev[currDayStr] || 0;
-                            if (!prev && !curr) return '-';
-                            if (!prev) return 'NEW';
-                            return `${(((curr - prev) / prev) * 100).toFixed(1)}%`;
-                        }
-                    });
+                    const prevDay = sortedDays[idx - 1];
+                    columnDef.push({ label: `DoD`, getValue: r => { const p = r.dailyRev[prevDay] || 0; const c = r.dailyRev[dayStr] || 0; return !p && !c ? '-' : !p ? 'NEW' : `${(((c - p) / p) * 100).toFixed(1)}%`; } });
                 }
             });
-
-            columnDef.push({
-                label: `${week.label} Total`,
-                getValue: (r) => r.weeklyRev[week.key] || 0
-            });
-            columnDef.push({
-                label: `${week.label} WoW Trend`,
-                getValue: (r) => {
-                    const trend = getGmsTrend(r, 'week', rawGmsMap, exportLevel, week.key);
-                    return trend === null ? '-' : `${trend.toFixed(1)}%`;
-                }
-            });
+            columnDef.push({ label: `${week.label} Total`, getValue: r => r.weeklyRev[week.key] || 0 });
+            columnDef.push({ label: `${week.label} WoW`, getValue: r => { const t = getGmsTrend(r, 'week', {}, exportLevel, week.key); return t === null ? '-' : `${t.toFixed(1)}%`; } });
         });
-
-        columnDef.push({
-            label: `${month.label} Total`,
-            getValue: (r) => r.monthlyRev[month.key] || 0
-        });
-        columnDef.push({
-            label: `${month.label} MoM Trend`,
-            getValue: (r) => {
-                const trend = getGmsTrend(r, 'month', rawGmsMap, exportLevel, month.key);
-                return trend === null ? '-' : `${trend.toFixed(1)}%`;
-            }
-        });
+        columnDef.push({ label: `${month.label} Total`, getValue: r => r.monthlyRev[month.key] || 0 });
+        columnDef.push({ label: `${month.label} MoM`, getValue: r => { const t = getGmsTrend(r, 'month', {}, exportLevel, month.key); return t === null ? '-' : `${t.toFixed(1)}%`; } });
     });
 
-    const sheetHeaders = columnDef.map(c => c.label);
-
-    // Generate rows with progress tracking
     await updateDownloadStatus(pool, downloadId, 'processing', 70);
+
+    // Build sheet data
+    const sheetHeaders = columnDef.map(c => c.label);
     const sheetRows = [];
     for (let i = 0; i < matrixRows.length; i++) {
         try {
             sheetRows.push(columnDef.map(c => c.getValue(matrixRows[i])));
-        } catch (rowErr) {
-            console.warn(`Row ${i} generation failed:`, rowErr.message);
+        } catch (e) {
             sheetRows.push(columnDef.map(() => '-'));
         }
-        if (i % 5000 === 0 && i > 0) {
-            const p = Math.min(75, 70 + Math.round(i / matrixRows.length * 5));
-            await updateDownloadStatus(pool, downloadId, 'processing', p);
+        if (i % 10000 === 0 && i > 0) {
+            await updateDownloadStatus(pool, downloadId, 'processing', Math.min(85, 70 + Math.round(i / matrixRows.length * 15)));
         }
     }
 
-    // Use the filename already stored in the DB record to keep them consistent
-    const gmsFileResult = await pool.request()
-        .input('id', sql.VarChar, downloadId)
+    await updateDownloadStatus(pool, downloadId, 'processing', 85);
+
+    // Get file path
+    const gmsFileResult = await pool.request().input('id', sql.VarChar, downloadId)
         .query('SELECT FileName FROM Downloads WHERE Id = @id');
     const fileName = gmsFileResult.recordset[0]?.FileName || `gms_export_${exportLevel}_${downloadId}.xlsx`;
     const filePath = path.join(EXPORTS_DIR, `${downloadId}_${fileName}`);
 
-    const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet('GMS Matrix');
-
-    if (sheetRows.length > 0) {
-        worksheet.columns = sheetHeaders.map(label => ({
-            header: label,
-            width: label.includes('Product Title') || label.includes('Seller') || label.includes('Brand') ? 25 : 15
-        }));
-
-        // Add rows in chunks to avoid memory issues
-        const ROW_CHUNK = 1000;
-        for (let i = 0; i < sheetRows.length; i += ROW_CHUNK) {
-            const rowChunk = sheetRows.slice(i, i + ROW_CHUNK);
-            rowChunk.forEach(rowArr => worksheet.addRow(rowArr));
-            const rowProgress = Math.min(85, 75 + Math.round((i + rowChunk.length) / sheetRows.length * 10));
-            await updateDownloadStatus(pool, downloadId, 'processing', rowProgress);
-        }
-
-        // Style header row only
-        const headerRow = worksheet.getRow(1);
-        headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-        headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } };
-        headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
-        headerRow.height = 24;
-
-        // Apply borders only for small datasets (< 10K rows) to avoid timeout
-        if (sheetRows.length < 10000) {
-            const borderStyle = {
-                top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
-                left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
-                bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
-                right: { style: 'thin', color: { argb: 'FFE2E8F0' } }
-            };
-            worksheet.eachRow((row, rowNumber) => {
-                if (rowNumber > 1) {
-                    row.eachCell(cell => { cell.border = borderStyle; });
-                }
-            });
-        }
-    }
-
-    await updateDownloadStatus(pool, downloadId, 'processing', 90);
-
-    // Write workbook — streaming for any size
-    const tempFile = filePath + '.tmp';
+    // BULLETPROOF: Use xlsx library (simpler, more reliable than ExcelJS)
     try {
-        await workbook.xlsx.writeFile(tempFile);
-        fs.copyFileSync(tempFile, filePath);
-        try { fs.unlinkSync(tempFile); } catch {}
-    } catch (writeErr) {
-        // Fallback: writeBuffer
-        console.warn(`writeFile failed for ${downloadId}, trying writeBuffer:`, writeErr.message);
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.aoa_to_sheet([sheetHeaders, ...sheetRows]);
+        XLSX.utils.book_append_sheet(wb, ws, 'GMS Matrix');
+        const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' });
+        fs.writeFileSync(filePath, wbout);
+    } catch (xlsxErr) {
+        console.error(`XLSX write failed for ${downloadId}:`, xlsxErr.message);
+        // Fallback: write as CSV
         try {
-            const buffer = await workbook.xlsx.writeBuffer();
-            fs.writeFileSync(filePath, buffer);
-        } catch (bufErr) {
-            throw new Error(`Excel generation failed: ${bufErr.message}`);
+            const csvContent = [sheetHeaders.join(','), ...sheetRows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))].join('\n');
+            const csvPath = filePath.replace('.xlsx', '.csv');
+            fs.writeFileSync(csvPath, csvContent, 'utf8');
+            // Rename CSV to xlsx for consistency
+            fs.copyFileSync(csvPath, filePath);
+            fs.unlinkSync(csvPath);
+        } catch (csvErr) {
+            throw new Error(`Export failed: ${csvErr.message}`);
         }
     }
 
-    // Verify file exists and has content
+    // Verify file
     if (!fs.existsSync(filePath) || fs.statSync(filePath).size === 0) {
-        throw new Error('Export file is empty or missing after write');
+        throw new Error('Export file is empty or missing');
     }
 
     const stats = fs.statSync(filePath);
 
-    // Update download record as completed
     await pool.request()
         .input('id', sql.VarChar, downloadId)
         .input('fileSize', sql.BigInt, stats.size)
         .input('rowCount', sql.Int, sheetRows.length)
         .input('filePath', sql.VarChar, `/exports/${downloadId}_${fileName}`)
-        .query(`
-            UPDATE Downloads SET 
-                Status = 'completed',
-                Progress = 100,
-                FileSize = @fileSize,
-                [RowCount] = @rowCount,
-                FilePath = @filePath,
-                CompletedAt = dbo.GetEnvDate(),
-                ExpiresAt = DATEADD(HOUR, 24, dbo.GetEnvDate())
-            WHERE Id = @id
-        `);
+        .query(`UPDATE Downloads SET Status = 'completed', Progress = 100, FileSize = @fileSize, [RowCount] = @rowCount, FilePath = @filePath, CompletedAt = dbo.GetEnvDate(), ExpiresAt = DATEADD(HOUR, 24, dbo.GetEnvDate()) WHERE Id = @id`);
 
     SocketService.emitExportUpdate(downloadId, { status: 'completed', progress: 100, filePath: `/exports/${downloadId}_${fileName}` });
 }
