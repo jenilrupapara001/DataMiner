@@ -2,7 +2,7 @@
  * RetailOps Partner — Root Layout
  */
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -12,6 +12,7 @@ import 'react-native-reanimated';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { tokenManager } from '@/services/apiClient';
 import { SellerProvider } from '@/contexts/SellerContext';
+import { pushNotificationService } from '@/services/pushNotificationService';
 
 export const unstable_settings = {
   anchor: 'login',
@@ -20,63 +21,34 @@ export const unstable_settings = {
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
   const router = useRouter();
-  const [isReady, setIsReady] = useState(false);
-  const hasNavigated = useRef(false);
+  const [initialRoute, setInitialRoute] = useState<string | null>(null);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      const checkAuth = async () => {
-        try {
-          const hasTokens = await tokenManager.loadTokens();
-          if (hasTokens && tokenManager.isAuthenticated()) {
-            // Has tokens — try dashboard
-            try {
-              const { dashboardService } = await import('@/services');
-              await dashboardService.getProfile();
-              // Profile OK — go to dashboard
-              if (!hasNavigated.current) {
-                hasNavigated.current = true;
-                router.replace('/(tabs)');
-              }
-            } catch {
-              // Profile failed — clear tokens, go to login
-              await tokenManager.clearTokens();
-              if (!hasNavigated.current) {
-                hasNavigated.current = true;
-                router.replace('/login');
-              }
-            }
-          } else {
-            // No tokens — go to login
-            if (!hasNavigated.current) {
-              hasNavigated.current = true;
-              router.replace('/login');
-            }
-          }
-        } catch {
-          if (!hasNavigated.current) {
-            hasNavigated.current = true;
-            router.replace('/login');
-          }
-        } finally {
-          setIsReady(true);
+    const checkAuth = async () => {
+      try {
+        const hasTokens = await tokenManager.loadTokens();
+        if (hasTokens && tokenManager.isAuthenticated()) {
+          // Initialize push notifications
+          pushNotificationService.register().catch(() => {});
+          setInitialRoute('(tabs)');
+        } else {
+          setInitialRoute('login');
         }
-      };
-      checkAuth();
-    }, 150); // Small delay to let Stack mount
-
-    return () => clearTimeout(timer);
+      } catch {
+        setInitialRoute('login');
+      }
+    };
+    checkAuth();
   }, []);
 
-  if (!isReady) {
-    return (
-      <SellerProvider>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#2563EB" />
-        </View>
-      </SellerProvider>
-    );
-  }
+  // Navigate after initialRoute is set
+  useEffect(() => {
+    if (!initialRoute) return;
+    const timer = setTimeout(() => {
+      router.replace(initialRoute === '(tabs)' ? '/(tabs)' : '/login');
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [initialRoute]);
 
   return (
     <SellerProvider>
@@ -108,15 +80,6 @@ function RootLayoutNav() {
     </SellerProvider>
   );
 }
-
-const styles = StyleSheet.create({
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-  },
-});
 
 export default function RootLayout() {
   return <RootLayoutNav />;

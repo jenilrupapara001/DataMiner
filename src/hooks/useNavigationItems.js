@@ -7,7 +7,7 @@ import {
     Target, TrendingUp, Calendar, PieChart,
     Settings, Activity, FileText, Layers,
     ShoppingBag, Zap, Bell, FolderOpen,
-    MessageSquare, ChevronRight, Store, KeyRound, Database, Map, ListTodo, GitBranch, LayoutTemplate, Clock, BarChart2, ScanSearch, Warehouse, Webhook, ClipboardList, CheckSquare, UserCheck, LineChart
+    MessageSquare, ChevronRight, Store, KeyRound, Database, Map, ListTodo, GitBranch, LayoutTemplate, Clock, BarChart2, ScanSearch, Warehouse, Webhook, ClipboardList, CheckSquare, UserCheck, LineChart, RefreshCcw
 } from 'lucide-react';
 
 export function useNavigationItems() {
@@ -230,6 +230,16 @@ export function useNavigationItems() {
                     label: 'Scheduled Runs',
                     path: '/scheduled-runs',
                     icon: Clock,
+                    section: 'automation',
+                }
+            ),
+            guard(
+                isAdmin || isGlobalUser || hasPermission('scraping_view'),
+                {
+                    key: 'live-sync-tracker',
+                    label: 'Live Sync Tracker',
+                    path: '/live-sync-tracker',
+                    icon: RefreshCcw,
                     section: 'automation',
                 }
             ),

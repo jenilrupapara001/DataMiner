@@ -39,9 +39,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import {
-  Menu,
   Search,
-  Bell,
   ChevronDown,
   FileDown,
   TrendingUp,
@@ -62,6 +60,8 @@ import {
   PieChart,
 } from 'react-native-gifted-charts';
 import { useSeller } from '@/contexts/SellerContext';
+import { dashboardService } from '@/services';
+
 
 // ============================================================
 // CONSTANTS
@@ -273,6 +273,30 @@ export default function DashboardScreen() {
   const [year, setYear] = useState(2017);
   const { sellers, selectedSeller, selectSeller } = useSeller();
   const [showSellerPicker, setShowSellerPicker] = useState(false);
+  const [userName, setUserName] = useState('');
+
+  // Fetch user name
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const res = await dashboardService.getProfile();
+        const user = (res as any)?.data;
+        if (user) {
+          const first = user.FirstName || user.firstName || '';
+          const last = user.LastName || user.lastName || '';
+          setUserName([first, last].filter(Boolean).join(' '));
+        }
+      } catch {}
+    };
+    fetchData();
+  }, []);
+
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good Morning';
+    if (hour < 17) return 'Good Afternoon';
+    return 'Good Evening';
+  };
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -300,14 +324,6 @@ export default function DashboardScreen() {
       >
         {/* ── Top Bar ── */}
         <Animated.View entering={FadeIn.duration(300)} style={styles.topBar}>
-          <Pressable
-            style={styles.iconBtn}
-            onPress={() => Haptics.selectionAsync()}
-            hitSlop={8}
-          >
-            <Menu size={24} color={COLORS.text} strokeWidth={2} />
-          </Pressable>
-
           <View style={styles.searchBar}>
             <Search size={18} color={COLORS.textSecondary} strokeWidth={2} />
             <TextInput
@@ -317,8 +333,8 @@ export default function DashboardScreen() {
             />
           </View>
 
-          {/* Brand Selector */}
-          {sellers.length > 1 && (
+          {/* Brand Selector with Avatar */}
+          {sellers.length > 1 ? (
             <Pressable
               style={styles.brandSelector}
               onPress={() => {
@@ -326,21 +342,33 @@ export default function DashboardScreen() {
                 setShowSellerPicker(!showSellerPicker);
               }}
             >
-              <Text style={styles.brandText} numberOfLines={1}>
-                {selectedSeller?.Name || 'Select Brand'}
-              </Text>
-              <ChevronDown size={14} color={COLORS.blue} strokeWidth={2.5} />
+              <View style={styles.brandAvatar}>
+                <Text style={styles.brandAvatarText}>
+                  {selectedSeller?.Name?.charAt(0)?.toUpperCase() || 'B'}
+                </Text>
+              </View>
+              <View style={styles.brandInfo}>
+                <Text style={styles.brandName} numberOfLines={1}>
+                  {selectedSeller?.Name || 'Select Brand'}
+                </Text>
+                <Text style={styles.brandMarketplace}>
+                  {selectedSeller?.Marketplace || 'Amazon'}
+                </Text>
+              </View>
+              <ChevronDown size={16} color={COLORS.textSecondary} strokeWidth={2} />
             </Pressable>
-          )}
-
-          <Pressable
-            style={styles.iconBtn}
-            onPress={() => Haptics.selectionAsync()}
-            hitSlop={8}
-          >
-            <Bell size={24} color={COLORS.text} strokeWidth={2} />
-            <View style={styles.notifDot} />
-          </Pressable>
+          ) : selectedSeller ? (
+            <View style={styles.brandSelectorStatic}>
+              <View style={styles.brandAvatar}>
+                <Text style={styles.brandAvatarText}>
+                  {selectedSeller.Name?.charAt(0)?.toUpperCase() || 'B'}
+                </Text>
+              </View>
+              <Text style={styles.brandNameStatic} numberOfLines={1}>
+                {selectedSeller.Name}
+              </Text>
+            </View>
+          ) : null}
         </Animated.View>
 
         {/* Brand Picker Dropdown */}
@@ -359,25 +387,41 @@ export default function DashboardScreen() {
                   setShowSellerPicker(false);
                 }}
               >
-                <Text
-                  style={[
-                    styles.brandOptionText,
-                    selectedSeller?.Id === seller.Id && styles.brandOptionTextSelected,
-                  ]}
-                  numberOfLines={1}
-                >
-                  {seller.Name}
-                </Text>
-                <Text style={styles.brandOptionMeta}>
-                  {seller.Marketplace || 'Amazon'}{seller.SellerId ? ` • ${seller.SellerId}` : ''}
-                </Text>
+                <View style={styles.brandOptionAvatar}>
+                  <Text style={styles.brandOptionAvatarText}>
+                    {seller.Name?.charAt(0)?.toUpperCase() || 'B'}
+                  </Text>
+                </View>
+                <View style={styles.brandOptionInfo}>
+                  <Text style={styles.brandOptionName} numberOfLines={1}>
+                    {seller.Name}
+                  </Text>
+                  <Text style={styles.brandOptionMeta}>
+                    {seller.Marketplace || 'Amazon'}{seller.SellerId ? ` • ${seller.SellerId}` : ''}
+                  </Text>
+                </View>
                 {selectedSeller?.Id === seller.Id && (
-                  <Check size={16} color={COLORS.blue} strokeWidth={2.5} />
+                  <Check size={18} color={COLORS.blue} strokeWidth={2.5} />
                 )}
               </Pressable>
             ))}
           </Animated.View>
         )}
+
+        {/* ── Greeting ── */}
+        <Animated.View
+          entering={FadeInDown.duration(400).delay(60)}
+          style={styles.greetingSection}
+        >
+          <View>
+            <Text style={styles.greetingText}>
+              {getGreeting()}, {selectedSeller?.Name || 'Partner'} 👋
+            </Text>
+            <Text style={styles.greetingSubtext}>
+              Here's your business overview
+            </Text>
+          </View>
+        </Animated.View>
 
         {/* ── Overview Header ── */}
         <Animated.View
@@ -787,37 +831,64 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     padding: 0,
   },
-  notifDot: {
-    position: 'absolute',
-    top: 8,
-    right: 10,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#EC4899',
-  },
 
   // ── Brand Selector ──
   brandSelector: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: COLORS.blueSoft,
-    paddingHorizontal: 10,
+    gap: 8,
+    backgroundColor: COLORS.card,
+    paddingHorizontal: 8,
     paddingVertical: 6,
-    borderRadius: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
-  brandText: {
-    fontSize: 12,
+  brandSelectorStatic: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 4,
+  },
+  brandAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: COLORS.blue,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  brandAvatarText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  brandInfo: {
+    flex: 1,
+  },
+  brandName: {
+    fontSize: 13,
     fontWeight: '600',
-    color: COLORS.blue,
-    maxWidth: 100,
+    color: COLORS.text,
+    maxWidth: 80,
+  },
+  brandNameStatic: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.text,
+    maxWidth: 120,
+  },
+  brandMarketplace: {
+    fontSize: 10,
+    color: COLORS.textSecondary,
   },
   brandPicker: {
     backgroundColor: COLORS.card,
     borderRadius: 12,
     marginBottom: 16,
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: COLORS.border,
     ...Platform.select({
       ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 16 },
       android: { elevation: 4 },
@@ -826,6 +897,7 @@ const styles = StyleSheet.create({
   brandOption: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 12,
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
@@ -834,20 +906,48 @@ const styles = StyleSheet.create({
   brandOptionSelected: {
     backgroundColor: COLORS.blueSoft,
   },
-  brandOptionText: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: '500',
-    color: COLORS.text,
+  brandOptionAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: COLORS.blue,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  brandOptionTextSelected: {
+  brandOptionAvatarText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  brandOptionInfo: {
+    flex: 1,
+  },
+  brandOptionName: {
+    fontSize: 14,
     fontWeight: '600',
-    color: COLORS.blue,
+    color: COLORS.text,
+    marginBottom: 2,
   },
   brandOptionMeta: {
     fontSize: 11,
     color: COLORS.textSecondary,
-    marginRight: 8,
+  },
+
+  // ── Greeting ──
+  greetingSection: {
+    marginBottom: 20,
+    paddingHorizontal: 2,
+  },
+  greetingText: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: COLORS.text,
+    letterSpacing: -0.4,
+    marginBottom: 4,
+  },
+  greetingSubtext: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
   },
 
   // ── Section header ──

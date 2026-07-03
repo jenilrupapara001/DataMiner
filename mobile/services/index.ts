@@ -45,3 +45,6 @@ export type { NotificationItem, AlertItem } from './notificationService';
 
 // Scheduled Runs, Tracker, Files
 export { scheduledRunService, trackerService, fileService } from './miscService';
+
+// Push Notifications
+export { pushNotificationService } from './pushNotificationService';
