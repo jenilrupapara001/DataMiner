@@ -438,7 +438,7 @@ exports.cancelJob = async (req, res) => {
 
 // ── Background job processor (bulletproof — never lose accessible ASINs) ──
 const MAX_BATCH_RETRIES = 5;
-const RETRY_DELAYS = [3000, 8000, 20000]; // exponential backoff per retry
+const RETRY_DELAYS = [3000, 8000, 20000, 40000, 80000]; // exponential backoff per retry
 const BASE_BATCH_DELAY = 1500; // 1.5s between batches
 const RATE_LIMIT_DELAY = 30000; // 30s on 429
 const STALE_DELAY = 5000; // 5s after any error before next batch
