@@ -604,11 +604,13 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
                 <div style={{ background: C.white, padding: '14px 16px', borderRadius: 10, border: `1px solid ${C.borderLight}`, height: '100%' }}>
                   <Text type="secondary" style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 8 }}>Deal & Availability</Text>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {asin.dealBadge && asin.dealBadge !== 'No deal found' && asin.dealBadge !== '' ? (
+                    {(() => {
+                      const dealActive = asin.dealBadge && asin.dealBadge !== 'No deal found' && asin.dealBadge !== '' && asin.dealStartTime && asin.dealEndTime && new Date(asin.dealStartTime) <= new Date() && new Date() <= new Date(asin.dealEndTime);
+                      return dealActive ? (
                       <div style={{ padding: '8px 10px', background: '#fef3c7', border: '1px solid #fde68a', borderRadius: 8 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                          <span style={{ fontSize: 11, fontWeight: 700, color: '#92400e' }}>🎁 {asin.dealBadge}</span>
-                          {asin.hasDeal && <Tag color="warning" style={{ border: 'none', fontSize: 9, padding: '0 4px', lineHeight: '16px', fontWeight: 700 }}>ACTIVE</Tag>}
+                          <span style={{ fontSize: 11, fontWeight: 700, color: '#92400e' }}>{asin.dealBadge}</span>
+                          <Tag color="warning" style={{ border: 'none', fontSize: 9, padding: '0 4px', lineHeight: '16px', fontWeight: 700 }}>ACTIVE</Tag>
                         </div>
                         {asin.dealStartTime && (
                           <div style={{ fontSize: 10, color: '#92400e', display: 'flex', gap: 8 }}>
@@ -617,9 +619,10 @@ const AsinDetailModal = ({ asin, isOpen, onClose }) => {
                           </div>
                         )}
                       </div>
-                    ) : (
+                      ) : (
                       <div style={{ fontSize: 12, color: C.textSecondary }}>No active deal</div>
-                    )}
+                      );
+                    })()}
                     <div>
                       <Text type="secondary" style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Availability</Text>
                       <div style={{ marginTop: 4 }}>

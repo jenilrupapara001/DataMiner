@@ -607,11 +607,11 @@ class LiveDataSyncService extends EventEmitter {
                     UPDATE Asins SET
                         Title = @title,
                         ParentAsin = @parentAsin,
-                        CurrentPrice = @currentPrice,
-                        Mrp = @mrp,
+                        CurrentPrice = ISNULL(@currentPrice, CurrentPrice),
+                        Mrp = ISNULL(@mrp, Mrp),
                         Category = @mainCategory,
-                        BSR = @mainBSR,
-                        SubBSR = @subBSR,
+                        BSR = ISNULL(@mainBSR, BSR),
+                        SubBSR = ISNULL(@subBSR, SubBSR),
                         SubBSRCategory = @subBSRCategory,
                         Rating = ISNULL(@rating, Rating),
                         ReviewCount = ISNULL(@reviewCount, ReviewCount),
@@ -762,8 +762,19 @@ class LiveDataSyncService extends EventEmitter {
         
         // ── Deals (Creators API: from listing.dealDetails, NOT item.deals) ──
         const listingDealDetails = listing?.dealDetails || null;
-        const hasDeal = !!(listingDealDetails && (listingDealDetails.badge || listingDealDetails.type || listingDealDetails.hasDeal));
-        const activeDeal = listingDealDetails;
+        
+        // Fallback: item.deals array (Octoparse format or alternative API)
+        const itemDeals = item.deals || [];
+        const itemDeal = Array.isArray(itemDeals) && itemDeals.length > 0 ? itemDeals[0] : null;
+        
+        // Use listing.dealDetails if present, else item.deals[0]
+        const activeDeal = listingDealDetails || itemDeal;
+        const hasDeal = !!(activeDeal && (
+            activeDeal.badge || activeDeal.type || activeDeal.hasDeal || 
+            activeDeal.dealType || activeDeal.dealBadge || 
+            (activeDeal.startDate && activeDeal.endDate) ||
+            (activeDeal.startTime && activeDeal.endTime)
+        ));
         
         // ── Manufacturer ──────────────────────────────────────────────
         const manufacturer = item.itemInfo?.byLineInfo?.manufacturer?.displayValue 
@@ -771,13 +782,20 @@ class LiveDataSyncService extends EventEmitter {
                            || null;
         
         // ── Deal details with dates ──────────────────────────────────
-        const dealBadge = (activeDeal?.badge || activeDeal?.type || null);
-        const dealStartTime = activeDeal?.startDate ? new Date(activeDeal.startDate) 
-                            : activeDeal?.startTime ? new Date(activeDeal.startTime) 
-                            : null;
-        const dealEndTime = activeDeal?.endDate ? new Date(activeDeal.endDate)
-                          : activeDeal?.endTime ? new Date(activeDeal.endTime)
+        const dealBadge = (activeDeal?.badge || activeDeal?.type || activeDeal?.dealType || activeDeal?.dealBadge || null);
+        
+        let dealStartTime = null;
+        let dealEndTime = null;
+        
+        if (hasDeal) {
+            dealStartTime = activeDeal?.startDate ? new Date(activeDeal.startDate)
+                          : activeDeal?.startTime ? new Date(activeDeal.startTime)
                           : null;
+            dealEndTime = activeDeal?.endDate ? new Date(activeDeal.endDate)
+                        : activeDeal?.endTime ? new Date(activeDeal.endTime)
+                        : null;
+        }
+        
         const dealAccessType = activeDeal?.accessType || null;
         const dealPercentClaimed = activeDeal?.percentClaimed != null ? `${activeDeal.percentClaimed}%` : null;
         

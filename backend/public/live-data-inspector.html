@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Live Data Inspector — RetailOps</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f1f5f9; color: #1e293b; min-height: 100vh; }
+    .header { background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%); padding: 20px 32px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    .header h1 { color: #fff; font-size: 20px; font-weight: 700; }
+    .header p { color: rgba(255,255,255,0.8); font-size: 12px; margin-top: 2px; }
+    .header-actions { display: flex; gap: 10px; align-items: center; }
+    .badge { background: rgba(255,255,255,0.2); color: #fff; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+    .container { max-width: 1400px; margin: 0 auto; padding: 20px; display: grid; grid-template-columns: 380px 1fr; gap: 20px; }
+    @media (max-width: 900px) { .container { grid-template-columns: 1fr; } }
+    .panel { background: #fff; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); border: 1px solid #e2e8f0; }
+    .panel-header { padding: 14px 18px; border-bottom: 1px solid #f1f5f9; display: flex; align-items: center; justify-content: space-between; }
+    .panel-header h2 { font-size: 13px; font-weight: 700; color: #334155; }
+    .panel-body { padding: 18px; }
+    label.field-label { display: block; font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px; }
+    textarea { width: 100%; border: 1.5px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; line-height: 1.6; resize: vertical; transition: border-color 0.15s; outline: none; }
+    textarea:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.1); }
+    .asin-count { font-size: 10px; color: #94a3b8; margin-top: 4px; }
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 16px; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+    .btn-primary { background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #fff; width: 100%; }
+    .btn-primary:hover { background: linear-gradient(135deg, #1d4ed8, #1e40af); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(37,99,235,0.3); }
+    .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; transform: none; box-shadow: none; }
+    .btn-outline { background: #fff; color: #3b82f6; border: 1.5px solid #3b82f6; }
+    .btn-outline:hover { background: #eff6ff; }
+    .btn-success { background: #16a34a; color: #fff; }
+    .btn-success:hover { background: #15803d; }
+    .metrics-section { margin-top: 16px; }
+    .metrics-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+    .select-all { font-size: 11px; color: #3b82f6; cursor: pointer; font-weight: 600; border: none; background: none; }
+    .select-all:hover { text-decoration: underline; }
+    .metrics-grid { display: flex; flex-direction: column; gap: 4px; max-height: 320px; overflow-y: auto; }
+    .metric-item { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1.5px solid #e2e8f0; border-radius: 8px; cursor: pointer; transition: all 0.12s; user-select: none; }
+    .metric-item:hover { border-color: #93c5fd; background: #f8fafc; }
+    .metric-item.active { border-color: #3b82f6; background: #eff6ff; }
+    .metric-item input[type="checkbox"] { accent-color: #3b82f6; width: 14px; height: 14px; cursor: pointer; }
+    .metric-item .label { font-size: 12px; font-weight: 500; color: #334155; flex: 1; }
+    .metric-item .desc { font-size: 10px; color: #94a3b8; }
+    .results-area { min-height: 400px; }
+    .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 20px; color: #94a3b8; }
+    .empty-state svg { margin-bottom: 12px; opacity: 0.4; }
+    .empty-state p { font-size: 13px; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    thead th { background: #f8fafc; border-bottom: 2px solid #e2e8f0; padding: 10px 12px; text-align: left; font-weight: 700; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: #64748b; white-space: nowrap; position: sticky; top: 0; z-index: 1; }
+    tbody td { padding: 8px 12px; border-bottom: 1px solid #f1f5f9; white-space: nowrap; }
+    tbody tr:hover { background: #f8fafc; }
+    .asin-code { font-family: 'SF Mono', monospace; font-size: 10px; background: #f1f5f9; padding: 2px 6px; border-radius: 4px; }
+    .null-val { color: #cbd5e1; }
+    .table-wrapper { max-height: calc(100vh - 200px); overflow: auto; }
+    .toast { position: fixed; top: 20px; right: 20px; padding: 12px 20px; border-radius: 8px; font-size: 13px; font-weight: 600; z-index: 9999; transform: translateX(120%); transition: transform 0.3s ease; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+    .toast.show { transform: translateX(0); }
+    .toast.success { background: #16a34a; color: #fff; }
+    .toast.error { background: #dc2626; color: #fff; }
+    .toast.warning { background: #d97706; color: #fff; }
+    .loading-overlay { display: none; position: absolute; inset: 0; background: rgba(255,255,255,0.85); z-index: 10; flex-direction: column; align-items: center; justify-content: center; border-radius: 12px; }
+    .loading-overlay.active { display: flex; }
+    .spinner { width: 32px; height: 32px; border: 3px solid #e2e8f0; border-top-color: #3b82f6; border-radius: 50%; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-text { margin-top: 10px; font-size: 12px; color: #64748b; font-weight: 500; }
+    .stats-bar { display: flex; gap: 16px; padding: 10px 18px; border-bottom: 1px solid #f1f5f9; font-size: 11px; color: #64748b; }
+    .stats-bar strong { color: #334155; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <h1>Live Data Inspector</h1>
+      <p>Fetch real-time product data from Amazon Creators API</p>
+    </div>
+    <div class="header-actions">
+      <span class="badge" id="resultCount">0 results</span>
+      <button class="btn btn-success" id="exportBtn" style="display:none" onclick="exportData()">Export XLSX</button>
+    </div>
+  </div>
+
+  <div class="container">
+    <!-- Left Panel -->
+    <div>
+      <div class="panel">
+        <div class="panel-header">
+          <h2>ASIN Input</h2>
+        </div>
+        <div class="panel-body">
+          <label class="field-label">Enter ASINs (one per line or comma-separated)</label>
+          <textarea id="asinInput" rows="6" placeholder="B08FGPZNR6&#10;B09R9BGH3P&#10;B0D44SP9D7"></textarea>
+          <div class="asin-count" id="asinCount">0 ASINs entered</div>
+
+          <div style="margin-top: 14px;">
+            <button class="btn btn-primary" id="fetchBtn" onclick="fetchData()">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+              Fetch Live Data
+            </button>
+          </div>
+
+          <div class="metrics-section">
+            <div class="metrics-header">
+              <label class="field-label" style="margin:0">Select Metrics</label>
+              <button class="select-all" id="selectAllBtn" onclick="toggleSelectAll()">Select All</button>
+            </div>
+            <div class="metrics-grid" id="metricsGrid">
+              <div style="text-align:center;padding:20px;color:#94a3b8;font-size:12px">Loading metrics...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Panel -->
+    <div class="panel results-area" style="position:relative">
+      <div class="panel-header">
+        <h2>Results</h2>
+        <span id="resultStats" style="font-size:11px;color:#94a3b8"></span>
+      </div>
+      <div class="loading-overlay" id="loadingOverlay">
+        <div class="spinner"></div>
+        <div class="loading-text">Fetching data from Amazon API...</div>
+      </div>
+      <div id="resultsContainer">
+        <div class="empty-state">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+          <p>Enter ASINs and click Fetch to see results</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script>
+    const API_BASE = window.location.origin + '/api';
+    let allMetrics = [];
+    let selectedMetricKeys = [];
+    let results = [];
+
+    const METRIC_DESCRIPTIONS = {
+      price: 'Current selling price',
+      mrp: 'Maximum retail price',
+      bsr: 'Best Seller Rank',
+      subBsr: 'Sub-category BSR',
+      rating: 'Customer rating',
+      reviewCount: 'Total reviews',
+      buyBoxWinner: 'BuyBox status',
+      seller: 'BuyBox seller name',
+      availability: 'Stock status',
+      title: 'Product title',
+      brand: 'Brand name',
+      category: 'Product category',
+      dealBadge: 'Active deal type',
+    };
+
+    async function loadMetrics() {
+      try {
+        const res = await fetch(API_BASE + '/live-data/metrics').then(r => r.json());
+        if (res.success && res.data) {
+          allMetrics = res.data;
+          selectedMetricKeys = res.data.map(m => m.key);
+          renderMetrics();
+        }
+      } catch (e) {
+        document.getElementById('metricsGrid').innerHTML = '<div style="text-align:center;padding:20px;color:#dc2626;font-size:12px">Failed to load metrics</div>';
+      }
+    }
+
+    function renderMetrics() {
+      const grid = document.getElementById('metricsGrid');
+      grid.innerHTML = allMetrics.map(m => `
+        <div class="metric-item ${selectedMetricKeys.includes(m.key) ? 'active' : ''}" onclick="toggleMetric('${m.key}')">
+          <input type="checkbox" ${selectedMetricKeys.includes(m.key) ? 'checked' : ''} onclick="event.stopPropagation(); toggleMetric('${m.key}')">
+          <div>
+            <div class="label">${m.label}</div>
+            <div class="desc">${METRIC_DESCRIPTIONS[m.key] || ''}</div>
+          </div>
+        </div>
+      `).join('');
+      updateSelectAllBtn();
+    }
+
+    function toggleMetric(key) {
+      if (selectedMetricKeys.includes(key)) {
+        selectedMetricKeys = selectedMetricKeys.filter(k => k !== key);
+      } else {
+        selectedMetricKeys.push(key);
+      }
+      renderMetrics();
+    }
+
+    function toggleSelectAll() {
+      if (selectedMetricKeys.length === allMetrics.length) {
+        selectedMetricKeys = [];
+      } else {
+        selectedMetricKeys = allMetrics.map(m => m.key);
+      }
+      renderMetrics();
+    }
+
+    function updateSelectAllBtn() {
+      const btn = document.getElementById('selectAllBtn');
+      if (selectedMetricKeys.length === allMetrics.length) {
+        btn.textContent = 'Deselect All';
+      } else if (selectedMetricKeys.length === 0) {
+        btn.textContent = 'Select All';
+      } else {
+        btn.textContent = `Select All (${selectedMetricKeys.length}/${allMetrics.length})`;
+      }
+    }
+
+    document.getElementById('asinInput').addEventListener('input', function() {
+      const count = this.value.split(/[\n,]+/).filter(a => a.trim()).length;
+      document.getElementById('asinCount').textContent = count + ' ASIN' + (count !== 1 ? 's' : '') + ' entered';
+    });
+
+    async function fetchData() {
+      const asins = document.getElementById('asinInput').value.split(/[\n,]+/).map(a => a.trim()).filter(a => a.length > 0);
+      if (asins.length === 0) return showToast('Enter at least one ASIN', 'warning');
+      if (selectedMetricKeys.length === 0) return showToast('Select at least one metric', 'warning');
+      if (asins.length > 100) return showToast('Maximum 100 ASINs per request', 'warning');
+
+      document.getElementById('fetchBtn').disabled = true;
+      document.getElementById('loadingOverlay').classList.add('active');
+
+      try {
+        const res = await fetch(API_BASE + '/live-data/fetch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ asins, metrics: selectedMetricKeys })
+        }).then(r => r.json());
+
+        if (res.success) {
+          results = res.data || [];
+          document.getElementById('resultCount').textContent = results.length + ' results';
+          document.getElementById('resultStats').textContent = results.length + ' ASINs fetched';
+          document.getElementById('exportBtn').style.display = results.length > 0 ? '' : 'none';
+          renderResults();
+          showToast('Fetched data for ' + results.length + ' ASINs', 'success');
+        } else {
+          showToast(res.error || 'Failed to fetch data', 'error');
+        }
+      } catch (e) {
+        showToast('Network error: ' + e.message, 'error');
+      } finally {
+        document.getElementById('fetchBtn').disabled = false;
+        document.getElementById('loadingOverlay').classList.remove('active');
+      }
+    }
+
+    function renderResults() {
+      const container = document.getElementById('resultsContainer');
+      if (results.length === 0) {
+        container.innerHTML = '<div class="empty-state"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg><p>No results to display</p></div>';
+        return;
+      }
+
+      const metrics = selectedMetricKeys;
+      const ths = ['ASIN', 'Seller', ...metrics.map(k => {
+        const m = allMetrics.find(x => x.key === k);
+        return m ? m.label : k;
+      })];
+
+      const rows = results.map(row => {
+        const tds = [
+          '<td><span class="asin-code">' + (row.asin || '-') + '</span></td>',
+          '<td>' + (row.seller || '-') + '</td>',
+          ...metrics.map(k => {
+            const v = row[k];
+            if (v === null || v === undefined) return '<td class="null-val">—</td>';
+            return '<td>' + escapeHtml(String(v)) + '</td>';
+          })
+        ];
+        return '<tr>' + tds.join('') + '</tr>';
+      }).join('');
+
+      container.innerHTML = '<div class="table-wrapper"><table><thead><tr>' + ths.map(h => '<th>' + h + '</th>').join('') + '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+    }
+
+    function exportData() {
+      if (results.length === 0) return showToast('No data to export', 'warning');
+      const ws = XLSX.utils.json_to_sheet(results);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Live Data');
+      const date = new Date().toISOString().split('T')[0];
+      XLSX.writeFile(wb, 'live_data_' + date + '.xlsx');
+      showToast('Exported to Excel', 'success');
+    }
+
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    function showToast(msg, type) {
+      const toast = document.getElementById('toast');
+      toast.textContent = msg;
+      toast.className = 'toast ' + type + ' show';
+      setTimeout(() => toast.classList.remove('show'), 3000);
+    }
+
+    loadMetrics();
+  </script>
+</body>
+</html>
