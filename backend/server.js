@@ -186,6 +186,7 @@ app.use('/api/objectives', objectiveRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/market-sync', marketSyncRoutes);
+app.use('/api/live-data', liveDataRoutes);
 app.use('/api', growthExecutionRoutes);
 app.use('/api/logs', systemLogRoutes);
 app.use('/api/security', securityRoutes);
@@ -204,7 +205,6 @@ app.use('/api/targets', targetRoutes);
 app.use('/api/webhooks', webhookRoutes);
 app.use('/api/pems', pemsRoutes);
 app.use('/api/live-sync-tracker', pemsLiveSyncRoutes);
-app.use('/api/live-data', liveDataRoutes);
 
 // Health check endpoint - SQL version
 app.get('/api/health', async (req, res) => {

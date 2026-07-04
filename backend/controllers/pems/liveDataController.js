@@ -17,17 +17,6 @@ const AVAILABLE_METRICS = [
     { key: 'dealBadge', label: 'Deal Badge' },
 ];
 
-const API_RESOURCES = [
-    'itemInfo.title', 'itemInfo.byLineInfo',
-    'images.primary.large', 'images.variants.large',
-    'offersV2.listings.price', 'offersV2.listings.availability',
-    'offersV2.listings.merchantInfo', 'offersV2.listings.dealDetails',
-    'offersV2.listings.isBuyBoxWinner', 'offersV2.listings.condition',
-    'customerReviews.count', 'customerReviews.starRating',
-    'browseNodeInfo.browseNodes', 'browseNodeInfo.browseNodes.salesRank',
-    'browseNodeInfo.websiteSalesRank', 'parentASIN',
-];
-
 function extractMetricValue(key, item) {
     const listing = item.offersV2?.listings?.find(l => l.isBuyBoxWinner)
                  || item.offersV2?.listings?.[0]
@@ -81,6 +70,8 @@ exports.fetchLiveData = async (req, res) => {
 
         const asinList = asins.map(a => a.toUpperCase().trim());
 
+        const asinController = require('../../controllers/asinController');
+
         const creds = {
             cid: process.env.LIVE_SYNC_CLIENT_ID,
             cs: process.env.LIVE_SYNC_CLIENT_SECRET,
@@ -90,20 +81,17 @@ exports.fetchLiveData = async (req, res) => {
         if (!creds.cid || !creds.cs)
             return res.status(500).json({ success: false, error: 'Live Sync credentials not configured on server' });
 
-        // Get token
-        const params = new URLSearchParams();
-        params.append('grant_type', 'client_credentials');
-        params.append('client_id', creds.cid);
-        params.append('client_secret', creds.cs);
-        params.append('scope', 'creatorsapi::default');
-
-        const tokenRes = await axios.post('https://api.amazon.co.uk/auth/o2/token', params, {
+        const tokenRes = await axios.post('https://api.amazon.co.uk/auth/o2/token', new URLSearchParams({
+            grant_type: 'client_credentials',
+            client_id: creds.cid,
+            client_secret: creds.cs,
+            scope: 'creatorsapi::default',
+        }), {
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             timeout: 10000
         });
         const token = tokenRes.data.access_token;
 
-        // Batch ASINs (10 per request — API limit)
         const BATCH_SIZE = 10;
         const results = [];
         const notFound = [];
@@ -112,13 +100,22 @@ exports.fetchLiveData = async (req, res) => {
             const batch = asinList.slice(i, i + BATCH_SIZE);
             try {
                 const apiRes = await axios.post(
-                    'https://creatorsapi.amazon.com/catalog/v1/getItems',
+                    'https://creatorsapi.amazon/catalog/v1/getItems',
                     {
                         itemIds: batch,
                         itemIdType: 'ASIN',
                         marketplace: creds.mk,
                         partnerTag: creds.pt,
-                        resources: API_RESOURCES,
+                        resources: [
+                            'itemInfo.title', 'itemInfo.byLineInfo',
+                            'images.primary.large', 'images.variants.large',
+                            'offersV2.listings.price', 'offersV2.listings.availability',
+                            'offersV2.listings.merchantInfo', 'offersV2.listings.dealDetails',
+                            'offersV2.listings.isBuyBoxWinner', 'offersV2.listings.condition',
+                            'customerReviews.count', 'customerReviews.starRating',
+                            'browseNodeInfo.browseNodes', 'browseNodeInfo.browseNodes.salesRank',
+                            'browseNodeInfo.websiteSalesRank', 'parentASIN',
+                        ],
                     },
                     {
                         headers: {
@@ -155,14 +152,13 @@ exports.fetchLiveData = async (req, res) => {
                     results.push(row);
                 }
 
-                // Rate limit: wait between batches
                 if (i + BATCH_SIZE < asinList.length) {
                     await new Promise(r => setTimeout(r, 1100));
                 }
             } catch (batchErr) {
                 console.error('Batch API error:', batchErr.message);
                 for (const asinCode of batch) {
-                    notFound.push({ asin: asinCode, reason: 'API request failed' });
+                    notFound.push({ asin: asinCode, reason: 'API request failed: ' + batchErr.message });
                 }
             }
         }
