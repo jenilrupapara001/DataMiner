@@ -75,6 +75,7 @@ router.post('/upload-raw', protect, requirePermission('asinmanager_manage'), asi
 router.post('/parse-test', protect, requirePermission('asinmanager_manage'), asinController.testParseRaw);
 
 router.post('/export', protect, requirePermission('asinmanager_export'), asinController.exportData);
+router.get('/full-export', protect, requirePermission('asinmanager_export'), asinController.fullExport);
 
 // Tags routes — must be before /:id to avoid conflict
 router.get('/tags', protect, requirePermission('asinmanager_view'), tagController.getTags);

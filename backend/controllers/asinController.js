@@ -3282,3 +3282,141 @@ exports.matchAsins = async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 };
+
+/**
+ * GET /api/asins/full-export
+ * Full ASIN data export with BuyBox JSON parsed — streams as XLSX
+ */
+exports.fullExport = async (req, res) => {
+  try {
+    const pool = await getPool();
+    const { sellerId, status, limit: limitParam } = req.query;
+    const limit = Math.min(parseInt(limitParam) || 0, 200000);
+
+    let whereClause = 'WHERE a.AsinCode IS NOT NULL';
+    const request = pool.request();
+
+    if (sellerId) {
+      request.input('sellerId', sql.VarChar, sellerId);
+      whereClause += ' AND a.SellerId = @sellerId';
+    }
+    if (status) {
+      request.input('status', sql.NVarChar, status);
+      whereClause += ' AND a.Status = @status';
+    }
+
+    const limitClause = limit > 0 ? `TOP ${limit}` : '';
+
+    const result = await request.query(`
+      SELECT ${limitClause}
+        a.AsinCode,
+        s.Name as SellerName,
+        a.Title,
+        a.Brand,
+        a.Category,
+        a.CurrentPrice,
+        a.Mrp,
+        a.DiscountPercentage,
+        a.BSR,
+        a.SubBsr,
+        a.SubBSRCategory,
+        a.Rating,
+        a.ReviewCount,
+        a.RatingBreakdown,
+        a.BuyBoxWin,
+        a.BuyBoxStatus,
+        a.AvailabilityStatus,
+        a.DealBadge,
+        a.DealType,
+        a.DealStartTime,
+        a.DealEndTime,
+        a.HasAplus,
+        a.AplusModuleCount,
+        a.ImagesCount,
+        a.VideoCount,
+        a.BulletPoints,
+        a.StockLevel,
+        a.SoldBy,
+        a.BuyBoxes,
+        a.AllOffers,
+        a.LastSyncSource,
+        a.LastLiveSyncAt,
+        a.LastOctoparseSyncAt,
+        a.Status,
+        a.ScrapeStatus
+      FROM Asins a
+      LEFT JOIN Sellers s ON a.SellerId = s.Id
+      ${whereClause}
+      ORDER BY s.Name, a.AsinCode
+    `);
+
+    // Parse BuyBoxes JSON and build flat export rows
+    const rows = result.recordset.map(r => {
+      let buyBoxSeller = '', buyBoxPrice = '', buyBoxMrp = '', buyBoxCondition = '', buyBoxAvailability = '';
+      try {
+        const buyBoxes = typeof r.BuyBoxes === 'string' ? JSON.parse(r.BuyBoxes) : r.BuyBoxes;
+        if (Array.isArray(buyBoxes) && buyBoxes.length > 0) {
+          const bb = buyBoxes[0];
+          buyBoxSeller = bb.seller || '';
+          buyBoxPrice = bb.price || bb.priceAmount || '';
+          buyBoxMrp = bb.mrp || bb.mrpAmount || '';
+          buyBoxCondition = typeof bb.condition === 'object' ? (bb.condition.value || bb.condition.subCondition || '') : (bb.condition || '');
+          buyBoxAvailability = bb.availability || '';
+        }
+      } catch {}
+
+      return {
+        ASIN: r.AsinCode,
+        Seller: r.SellerName || '',
+        Title: r.Title || '',
+        Brand: r.Brand || '',
+        Category: r.Category || '',
+        Price: r.CurrentPrice || '',
+        MRP: r.Mrp || '',
+        Discount: r.DiscountPercentage ? `${r.DiscountPercentage}%` : '',
+        MainBSR: r.BSR || '',
+        SubBSR: r.SubBsr || '',
+        SubBSRCategory: r.SubBSRCategory || '',
+        Rating: r.Rating || '',
+        ReviewCount: r.ReviewCount || '',
+        RatingBreakdown: r.RatingBreakdown || '',
+        BuyBoxWin: r.BuyBoxWin ? 'Yes' : 'No',
+        BuyBoxSeller: buyBoxSeller,
+        BuyBoxPrice: buyBoxPrice,
+        BuyBoxMrp: buyBoxMrp,
+        BuyBoxCondition: buyBoxCondition,
+        BuyBoxAvailability: buyBoxAvailability,
+        Availability: r.AvailabilityStatus || '',
+        DealBadge: r.DealBadge || '',
+        DealType: r.DealType || '',
+        DealStart: r.DealStartTime ? new Date(r.DealStartTime).toISOString().split('T')[0] : '',
+        DealEnd: r.DealEndTime ? new Date(r.DealEndTime).toISOString().split('T')[0] : '',
+        HasAplus: r.HasAplus ? 'Yes' : 'No',
+        AplusModules: r.AplusModuleCount || 0,
+        Images: r.ImagesCount || 0,
+        Videos: r.VideoCount || 0,
+        BulletPoints: r.BulletPoints || 0,
+        Stock: r.StockLevel || '',
+        SoldBy: r.SoldBy || '',
+        SyncSource: r.LastSyncSource || '',
+        LastLiveSync: r.LastLiveSyncAt ? new Date(r.LastLiveSyncAt).toISOString() : '',
+        LastOctoparseSync: r.LastOctoparseSyncAt ? new Date(r.LastOctoparseSyncAt).toISOString() : '',
+        Status: r.Status || '',
+        ScrapeStatus: r.ScrapeStatus || '',
+      };
+    });
+
+    const XLSX = require('xlsx');
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'ASIN Data');
+    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="asin_full_export_${new Date().toISOString().slice(0,10)}.xlsx"`);
+    res.send(buf);
+  } catch (error) {
+    console.error('fullExport Error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};

@@ -104,7 +104,7 @@ class LiveDataSyncService extends EventEmitter {
                     SELECT Id, AsinCode, UploadedPrice 
                     FROM Asins 
                     WHERE SellerId = @sellerId 
-                    AND Status IN ('Active', 'Error')
+                    AND Status IN ('Active', 'Error', 'Scraping')
                     AND AsinCode IS NOT NULL
                     ORDER BY AsinCode
                 `);
@@ -645,6 +645,7 @@ class LiveDataSyncService extends EventEmitter {
                         DiscountPercentage = @discount,
                         LastLiveSyncAt = dbo.GetEnvDate(),
                         LastSyncSource = 'LIVE',
+                        Status = 'Active',
                         UpdatedAt = dbo.GetEnvDate(),
                         AvailabilityStatus = @availability
                     WHERE Id = @asinId
