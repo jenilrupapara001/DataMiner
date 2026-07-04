@@ -194,7 +194,7 @@ async function logActivity(type, description, metadata = {}) {
         await SystemLogService.log({
             type,
             entityType: 'LIVE_DATA_INSPECTOR',
-            entityId: metadata.jobId || metadata.asinCount || null,
+            entityId: String(metadata.jobId || metadata.asinCount || 'N/A'),
             entityTitle: description,
             user: metadata.userId || null,
             description,
