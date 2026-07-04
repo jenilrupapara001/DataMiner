@@ -67,7 +67,7 @@ async function deleteJob(jobId) {
     if (r) {
         await r.del(JOB_PREFIX + jobId, JOB_RESULTS_PREFIX + jobId + ':data', JOB_RESULTS_PREFIX + jobId + ':nf');
     } else {
-        try { fs.unlinkSync(path.join(UPLOADS_DIR, jobId + '.json')); } catch {}
+        try { fs.unlinkSync(path.join(UPLOADS_DIR, jobId + '.json')); } catch { }
     }
 }
 
@@ -144,9 +144,9 @@ const AVAILABLE_METRICS = [
 
 function extractMetricValue(key, item) {
     const listing = item.offersV2?.listings?.find(l => l.isBuyBoxWinner)
-                 || item.offersV2?.listings?.[0]
-                 || item.buyBoxes?.find(b => b.isBuyBoxWinner)
-                 || item.buyBoxes?.[0];
+        || item.offersV2?.listings?.[0]
+        || item.buyBoxes?.find(b => b.isBuyBoxWinner)
+        || item.buyBoxes?.[0];
     switch (key) {
         case 'price': return listing?.price?.money?.amount || listing?.priceAmount || null;
         case 'mrp': return listing?.price?.savingBasis?.money?.amount || listing?.mrpAmount || null;
@@ -436,7 +436,13 @@ exports.cancelJob = async (req, res) => {
     });
 };
 
-// ── Background job processor ──────────────────────────────────────────
+// ── Background job processor (bulletproof — never lose accessible ASINs) ──
+const MAX_BATCH_RETRIES = 5;
+const RETRY_DELAYS = [3000, 8000, 20000]; // exponential backoff per retry
+const BASE_BATCH_DELAY = 1500; // 1.5s between batches
+const RATE_LIMIT_DELAY = 30000; // 30s on 429
+const STALE_DELAY = 5000; // 5s after any error before next batch
+
 async function processJob(jobId, asinList, selectedMetrics) {
     const creds = getCreds();
     if (!creds.cid || !creds.cs) throw new Error('Live Sync credentials not configured');
@@ -446,52 +452,90 @@ async function processJob(jobId, asinList, selectedMetrics) {
     let results = [];
     let notFoundList = [];
     let processed = 0, found = 0, notFound = 0;
+    let consecutiveErrors = 0;
 
     for (let i = 0; i < asinList.length; i += BATCH_SIZE) {
         const job = await loadJob(jobId);
         if (!job || job.status === 'cancelled') break;
 
         const batch = asinList.slice(i, i + BATCH_SIZE);
+        let batchSucceeded = false;
 
-        if (Date.now() > tokenExpiry - 60000) {
-            try { token = await getToken(creds); tokenExpiry = Date.now() + 3600000; } catch {}
+        // Refresh token if expired or about to expire
+        if (Date.now() > tokenExpiry - 120000) {
+            try { token = await getToken(creds); tokenExpiry = Date.now() + 3600000; consecutiveErrors = 0; } catch { }
         }
 
-        try {
-            const apiData = await callCreatorsAPI(token, batch, creds);
-            const items = apiData?.itemsResult?.items || [];
-            const errorMap = parseApiErrors(apiData?.errors || []);
+        // Retry loop — up to MAX_BATCH_RETRIES attempts
+        for (let attempt = 0; attempt < MAX_BATCH_RETRIES; attempt++) {
+            if (batchSucceeded) break;
 
-            for (const asinCode of batch) {
-                const item = items.find(it => it.asin === asinCode);
-                if (!item) {
-                    notFoundList.push({ asin: asinCode, reason: errorMap.get(asinCode) || 'Not returned by API' });
-                    notFound++;
-                } else {
-                    const row = { asin: asinCode, seller: extractMetricValue('seller', item) };
-                    for (const key of selectedMetrics) row[key] = extractMetricValue(key, item);
-                    results.push(row);
-                    found++;
-                }
-                processed++;
-            }
-        } catch (batchErr) {
-            if (batchErr.response?.status === 429 || batchErr.response?.status === 401) {
-                try {
-                    token = await getToken(creds); tokenExpiry = Date.now() + 3600000;
-                    const apiData = await callCreatorsAPI(token, batch, creds);
-                    const items = apiData?.itemsResult?.items || [];
-                    const errorMap = parseApiErrors(apiData?.errors || []);
-                    for (const asinCode of batch) {
-                        const item = items.find(it => it.asin === asinCode);
-                        if (!item) { notFoundList.push({ asin: asinCode, reason: 'Not found after retry' }); notFound++; }
-                        else { const row = { asin: asinCode, seller: extractMetricValue('seller', item) }; for (const key of selectedMetrics) row[key] = extractMetricValue(key, item); results.push(row); found++; }
-                        processed++;
+            try {
+                const apiData = await callCreatorsAPI(token, batch, creds);
+                const items = apiData?.itemsResult?.items || [];
+                const errorMap = parseApiErrors(apiData?.errors || []);
+
+                for (const asinCode of batch) {
+                    const item = items.find(it => it.asin === asinCode);
+                    if (!item) {
+                        notFoundList.push({ asin: asinCode, reason: errorMap.get(asinCode) || 'Not returned by API' });
+                        notFound++;
+                    } else {
+                        const row = { asin: asinCode, seller: extractMetricValue('seller', item) };
+                        for (const key of selectedMetrics) row[key] = extractMetricValue(key, item);
+                        results.push(row);
+                        found++;
                     }
-                } catch { for (const a of batch) { notFoundList.push({ asin: a, reason: 'API error after retry' }); notFound++; processed++; } }
-            } else {
-                for (const a of batch) { notFoundList.push({ asin: a, reason: 'API error: ' + batchErr.message }); notFound++; processed++; }
+                    processed++;
+                }
+                batchSucceeded = true;
+                consecutiveErrors = 0;
+
+            } catch (batchErr) {
+                const status = batchErr.response?.status;
+                const isRateLimit = status === 429;
+                const isAuth = status === 401 || status === 403;
+                const isNetwork = !status || batchErr.code === 'ECONNRESET' || batchErr.code === 'ETIMEDOUT' || batchErr.code === 'ECONNREFUSED' || batchErr.message?.includes('timeout');
+
+                if (isRateLimit) {
+                    // Respect Retry-After header if present
+                    const retryAfter = batchErr.response?.headers?.['retry-after'];
+                    const waitMs = retryAfter ? parseInt(retryAfter) * 1000 : RATE_LIMIT_DELAY;
+                    console.log(`Rate limited (429) on batch ${i / BATCH_SIZE + 1}, waiting ${waitMs / 1000}s...`);
+                    await new Promise(r => setTimeout(r, waitMs));
+                    // Refresh token after rate limit
+                    try { token = await getToken(creds); tokenExpiry = Date.now() + 3600000; } catch { }
+                    continue; // retry same batch
+                }
+
+                if (isAuth) {
+                    // Token expired — refresh and retry
+                    console.log(`Auth error (${status}) on batch ${i / BATCH_SIZE + 1}, refreshing token...`);
+                    try { token = await getToken(creds); tokenExpiry = Date.now() + 3600000; } catch { }
+                    continue; // retry same batch
+                }
+
+                if (isNetwork) {
+                    // Network error — wait with backoff and retry
+                    const waitMs = RETRY_DELAYS[attempt] || RETRY_DELAYS[RETRY_DELAYS.length - 1];
+                    console.log(`Network error on batch ${i / BATCH_SIZE + 1}, attempt ${attempt + 1}/${MAX_BATCH_RETRIES}, waiting ${waitMs / 1000}s...`);
+                    await new Promise(r => setTimeout(r, waitMs));
+                    continue; // retry same batch
+                }
+
+                // Other error (4xx/5xx) — backoff and retry
+                const waitMs = RETRY_DELAYS[attempt] || RETRY_DELAYS[RETRY_DELAYS.length - 1];
+                console.log(`API error ${status} on batch ${i / BATCH_SIZE + 1}, attempt ${attempt + 1}/${MAX_BATCH_RETRIES}, waiting ${waitMs / 1000}s...`);
+                await new Promise(r => setTimeout(r, waitMs));
             }
+        }
+
+        // If all retries failed — queue failed ASINs for retry after main loop
+        if (!batchSucceeded) {
+            consecutiveErrors++;
+            // Mark as not-found for now, will retry after all batches
+            for (const a of batch) { notFoundList.push({ asin: a, reason: 'API error after all retries' }); notFound++; processed++; }
+            console.warn(`Batch ${i / BATCH_SIZE + 1} FAILED after ${MAX_BATCH_RETRIES} retries — ${batch.length} ASINs queued for retry`);
         }
 
         // Save progress to Redis every batch
@@ -499,7 +543,82 @@ async function processJob(jobId, asinList, selectedMetrics) {
         job.results = results; job.notFoundList = notFoundList;
         await saveJob(job);
 
-        if (i + BATCH_SIZE < asinList.length) await new Promise(r => setTimeout(r, BATCH_DELAY_MS));
+        // Delay between batches — longer after errors
+        if (i + BATCH_SIZE < asinList.length) {
+            const delay = consecutiveErrors > 0
+                ? Math.min(STALE_DELAY * consecutiveErrors, 30000) // scale up on consecutive errors, max 30s
+                : BASE_BATCH_DELAY;
+            await new Promise(r => setTimeout(r, delay));
+        }
+    }
+
+    // ── RETRY PASS 2: Re-fetch all failed ASINs with fresh token ──
+    const failedAsins = notFoundList.map(n => n.asin);
+    if (failedAsins.length > 0 && failedAsins.length <= 5000) {
+        console.log(`Retry pass 2: re-fetching ${failedAsins.length} failed ASINs...`);
+        // Clear not-found list and re-process
+        notFoundList = [];
+        notFound = 0;
+        const retryResults = [];
+        let retryFound = 0;
+
+        // Get fresh token
+        try { token = await getToken(creds); tokenExpiry = Date.now() + 3600000; } catch { }
+
+        for (let i = 0; i < failedAsins.length; i += BATCH_SIZE) {
+            const job = await loadJob(jobId);
+            if (!job || job.status === 'cancelled') break;
+
+            const batch = failedAsins.slice(i, i + BATCH_SIZE);
+            let retryBatchOk = false;
+
+            for (let attempt = 0; attempt < MAX_BATCH_RETRIES; attempt++) {
+                if (retryBatchOk) break;
+                try {
+                    // Refresh token if needed
+                    if (Date.now() > tokenExpiry - 120000) {
+                        try { token = await getToken(creds); tokenExpiry = Date.now() + 3600000; } catch { }
+                    }
+                    const apiData = await callCreatorsAPI(token, batch, creds);
+                    const items = apiData?.itemsResult?.items || [];
+                    const errorMap = parseApiErrors(apiData?.errors || []);
+
+                    for (const asinCode of batch) {
+                        const item = items.find(it => it.asin === asinCode);
+                        if (!item) {
+                            notFoundList.push({ asin: asinCode, reason: errorMap.get(asinCode) || 'Not accessible' });
+                            notFound++;
+                        } else {
+                            const row = { asin: asinCode, seller: extractMetricValue('seller', item) };
+                            for (const key of selectedMetrics) row[key] = extractMetricValue(key, item);
+                            retryResults.push(row);
+                            retryFound++;
+                        }
+                    }
+                    retryBatchOk = true;
+                } catch (err) {
+                    const status = err.response?.status;
+                    if (status === 429) {
+                        const waitMs = err.response?.headers?.['retry-after'] ? parseInt(err.response.headers['retry-after']) * 1000 : RATE_LIMIT_DELAY;
+                        await new Promise(r => setTimeout(r, waitMs));
+                        try { token = await getToken(creds); tokenExpiry = Date.now() + 3600000; } catch { }
+                        continue;
+                    }
+                    const waitMs = RETRY_DELAYS[attempt] || RETRY_DELAYS[RETRY_DELAYS.length - 1];
+                    await new Promise(r => setTimeout(r, waitMs));
+                }
+            }
+
+            if (!retryBatchOk) {
+                for (const a of batch) { notFoundList.push({ asin: a, reason: 'Not accessible after retries' }); notFound++; }
+            }
+
+            if (i + BATCH_SIZE < failedAsins.length) await new Promise(r => setTimeout(r, BASE_BATCH_DELAY * 2));
+        }
+
+        // Merge retry results
+        results = [...results, ...retryResults];
+        found += retryFound;
     }
 
     const finalJob = await loadJob(jobId);
