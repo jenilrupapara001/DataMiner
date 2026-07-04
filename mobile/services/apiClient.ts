@@ -123,6 +123,7 @@ class ApiClient {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       Accept: 'application/json',
+      'X-Platform': 'mobile',
       ...((fetchOptions.headers as Record<string, string>) || {}),
     };
 

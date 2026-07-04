@@ -103,7 +103,7 @@ exports.requestOtp = async (req, res) => {
         user.Id,
         user.Email,
         'LOGIN',
-        { ipAddress: clientIp, userAgent: req.headers['user-agent'] }
+        { ipAddress: clientIp, userAgent: req.headers['user-agent'], source: req.headers['x-platform'] || 'web' }
       );
       
       return res.json({
