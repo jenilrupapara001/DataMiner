@@ -3,6 +3,7 @@ const axios = require('axios');
 const XLSX = require('xlsx');
 const path = require('path');
 const fs = require('fs');
+const SystemLogService = require('../../services/SystemLogService');
 
 const UPLOADS_DIR = path.join(__dirname, '../../uploads/live-data');
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
@@ -174,6 +175,24 @@ function extractMetricValue(key, item) {
     }
 }
 
+function getClientIp(req) {
+    return req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || req.connection?.remoteAddress || 'unknown';
+}
+
+async function logActivity(type, description, metadata = {}) {
+    try {
+        await SystemLogService.log({
+            type,
+            entityType: 'LIVE_DATA_INSPECTOR',
+            entityId: metadata.jobId || metadata.asinCount || null,
+            entityTitle: description,
+            user: metadata.userId || null,
+            description,
+            metadata: { ...metadata, source: 'live-data-inspector' },
+        });
+    } catch (e) { /* don't block on log failure */ }
+}
+
 exports.getMetrics = (req, res) => {
     res.json({ success: true, data: AVAILABLE_METRICS.map(m => ({ key: m.key, label: m.label })) });
 };
@@ -294,6 +313,11 @@ exports.fetchLiveData = async (req, res) => {
             notFound: notFound.length > 0 ? notFound : undefined,
             metrics: selectedMetrics,
         });
+
+        logActivity('LIVE_DATA_FETCH', `Fetched ${results.length} ASINs (${notFound.length} not found) — metrics: ${selectedMetrics.join(', ')}`, {
+            ip: getClientIp(req), asinCount: asins.length, foundCount: results.length,
+            notFoundCount: notFound.length, metrics: selectedMetrics,
+        });
     } catch (err) {
         console.error('Live data fetch error:', err.message);
         res.status(500).json({ success: false, error: err.message });
@@ -344,6 +368,11 @@ exports.uploadAndProcess = async (req, res) => {
         });
 
         res.json({ success: true, jobId, totalAsins: asinList.length, estimatedMinutes: Math.ceil((asinList.length / BATCH_SIZE) * BATCH_DELAY_MS / 60000) });
+
+        logActivity('LIVE_DATA_UPLOAD', `File upload: ${asinList.length} ASINs from ${req.file.originalname} — metrics: ${selectedMetrics.join(', ')}`, {
+            ip: getClientIp(req), jobId, asinCount: asinList.length,
+            fileName: req.file.originalname, fileSize: req.file.size, metrics: selectedMetrics,
+        });
     } catch (err) {
         console.error('Upload error:', err.message);
         res.status(500).json({ success: false, error: err.message });
@@ -388,6 +417,11 @@ exports.downloadResults = async (req, res) => {
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.send(buf);
+
+    logActivity('LIVE_DATA_DOWNLOAD', `Downloaded XLSX: ${job.results.length} ASINs from job ${job.id}`, {
+        ip: getClientIp(req), jobId: job.id, resultCount: job.results.length,
+        notFoundCount: job.notFoundList.length,
+    });
 };
 
 exports.cancelJob = async (req, res) => {
@@ -396,6 +430,10 @@ exports.cancelJob = async (req, res) => {
     job.status = 'cancelled';
     await saveJob(job);
     res.json({ success: true });
+
+    logActivity('LIVE_DATA_CANCEL', `Cancelled job ${job.id} at ${job.processed}/${job.totalAsins} ASINs`, {
+        ip: getClientIp(req), jobId: job.id, processed: job.processed, total: job.totalAsins,
+    });
 };
 
 // ── Background job processor ──────────────────────────────────────────
@@ -469,6 +507,12 @@ async function processJob(jobId, asinList, selectedMetrics) {
         finalJob.status = 'completed';
         finalJob.completedAt = new Date().toISOString();
         await saveJob(finalJob);
+
+        logActivity('LIVE_DATA_COMPLETE', `Job completed: ${finalJob.found}/${finalJob.totalAsins} ASINs found, ${finalJob.notFound} not found`, {
+            jobId, foundCount: finalJob.found, notFoundCount: finalJob.notFound,
+            totalAsins: finalJob.totalAsins, metrics: finalJob.metrics,
+            duration: finalJob.completedAt ? Math.round((new Date(finalJob.completedAt) - new Date(finalJob.startedAt)) / 1000) + 's' : 'unknown',
+        });
     }
 }
 
