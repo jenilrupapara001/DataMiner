@@ -1839,15 +1839,17 @@ const AsinManagerPage = (props) => {
     ];
 
     return (
-      <div className="d-flex flex-column gap-1" style={{ width: '50px' }}>
-        {stars.slice(0, 3).map(star => {
+      <div className="d-flex flex-column gap-1" style={{ width: '100px' }}>
+        {stars.map(star => {
           const pct = breakdown[star.key] || 0;
           return (
             <div key={star.key} className="d-flex align-items-center gap-1">
-              <span className="text-muted" style={{ fontSize: '0.6rem', width: '10px' }}>{star.label}★</span>
-              <div style={{ flex: 1, height: '4px', backgroundColor: '#e5e7eb', borderRadius: '2px', overflow: 'hidden' }}>
-                <div style={{ width: `${pct}%`, height: '100%', backgroundColor: star.color, borderRadius: '2px' }} />
+              <span className="text-muted" style={{ fontSize: '0.6rem', width: '12px', textAlign: 'right' }}>{star.label}</span>
+              <svg width="8" height="8" viewBox="0 0 24 24" fill="#fbbf24" stroke="none"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+              <div style={{ flex: 1, height: '5px', backgroundColor: '#e5e7eb', borderRadius: '3px', overflow: 'hidden' }}>
+                <div style={{ width: `${pct}%`, height: '100%', backgroundColor: star.color, borderRadius: '3px', transition: 'width 0.3s' }} />
               </div>
+              <span style={{ fontSize: '9px', color: '#6b7280', width: '22px', textAlign: 'right' }}>{pct}%</span>
             </div>
           );
         })}
@@ -2937,6 +2939,11 @@ const AsinManagerPage = (props) => {
                       {renderSortableHeader('CNT', 'reviewCount', 'center')}
                     </th>
                   )}
+                  {isVisible('ratingBreakdown') && (
+                    <th rowSpan={2} style={{ ...thStyle, width: '120px', textAlign: 'center', background: '#fffbeb', color: '#b45309', borderBottom: '2px solid #fde68a', transition: 'all 0.3s ease', fontSize: '10px', fontWeight: 700 }}>
+                      DISTRIBUTION
+                    </th>
+                  )}
                   {isVisible('ratingTrendStatus') && <th rowSpan={2} style={{ ...thStyle, width: '75px', textAlign: 'center', background: '#fffbeb', color: '#b45309', borderBottom: '2px solid #fde68a', transition: 'all 0.3s ease' }}>RATING TR</th>}
                   {visibleRatingTrendCount > 0 && (
                     <th colSpan={visibleRatingTrendCount}
@@ -3918,6 +3925,11 @@ const AsinManagerPage = (props) => {
                         {isVisible('reviewCount') && (
                           <td style={{ ...tdStyle, textAlign: 'center', color: '#6b7280', fontWeight: 500 }}>
                             {asin.reviewCount !== null && asin.reviewCount !== undefined ? asin.reviewCount.toLocaleString() : '-'}
+                          </td>
+                        )}
+                        {isVisible('ratingBreakdown') && (
+                          <td style={{ ...tdStyle, textAlign: 'center', padding: '4px 6px' }}>
+                            {renderRatingBreakdown(asin.ratingBreakdown)}
                           </td>
                         )}
                         {isVisible('ratingTrendStatus') && (

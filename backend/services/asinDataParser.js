@@ -311,6 +311,19 @@ class AsinDataParser {
 
         const rawAplus = parsed.A_plus || parsed.aplus || parsed.aplus_content || parsed.has_aplus || parsed.hasAplus || '';
         const hasAplus = this.hasAplus(rawAplus);
+        const aplusContent = typeof rawAplus === 'string' && rawAplus.length > 10 ? rawAplus : null;
+
+        // Rating breakdown extraction
+        const rawRatingBreakdown = parsed.Rating || parsed.rating_breakdown || parsed.Rating_breakdown || '';
+        let ratingBreakdown = { fiveStar: 0, fourStar: 0, threeStar: 0, twoStar: 0, oneStar: 0 };
+        if (rawRatingBreakdown && typeof rawRatingBreakdown === 'string') {
+            try {
+                const rbMatch = rawRatingBreakdown.match(/(\d+)%.*?(\d+)%.*?(\d+)%.*?(\d+)%.*?(\d+)%/);
+                if (rbMatch) {
+                    ratingBreakdown = { fiveStar: parseInt(rbMatch[1]), fourStar: parseInt(rbMatch[2]), threeStar: parseInt(rbMatch[3]), twoStar: parseInt(rbMatch[4]), oneStar: parseInt(rbMatch[5]) };
+                }
+            } catch {}
+        }
         
         // Bullet points
         const bulletPoints = this.parseBulletPoints(parsed.bp_all || '');
@@ -379,6 +392,9 @@ class AsinDataParser {
             BuyBoxSellerId: buyBoxSellerId,
             SoldBy: soldBy,
             HasAplus: hasAplus ? 1 : 0,
+            AplusContent: aplusContent,
+            AplusModuleCount: aplusContent ? 1 : 0,
+            RatingBreakdown: JSON.stringify(ratingBreakdown),
             StockLevel: 0,
             VideoCount: 0,
             Images: JSON.stringify(imagesList),

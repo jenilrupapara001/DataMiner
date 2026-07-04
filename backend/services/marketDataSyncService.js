@@ -1964,7 +1964,7 @@ class MarketDataSyncService {
             let mainImageUrl = '';
             let rating = 0;
             let reviewCount = 0;
-            let finalRatingBreakdown = { "5Star": 0, "4Star": 0, "3Star": 0, "2Star": 0, "1Star": 0 };
+            let finalRatingBreakdown = { fiveStar: 0, fourStar: 0, threeStar: 0, twoStar: 0, oneStar: 0 };
             let bulletPointsText = [];
             let bulletPointsCount = 0;
             let stockLevel = 0;
