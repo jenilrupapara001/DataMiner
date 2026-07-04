@@ -244,6 +244,16 @@ export function useNavigationItems() {
                 }
             ),
             guard(
+                true,
+                {
+                    key: 'live-data-inspector',
+                    label: 'Live Data Inspector',
+                    path: '/live-data-inspector',
+                    icon: BarChart2,
+                    section: 'automation',
+                }
+            ),
+            guard(
                 isAdmin || isGlobalUser || hasPermission('actions_view'),
                 {
                     key: 'templates',

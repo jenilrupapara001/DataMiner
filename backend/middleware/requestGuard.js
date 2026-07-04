@@ -19,7 +19,7 @@
  */
 
 const PAYLOAD_LIMIT_BYTES = 10 * 1024 * 1024; // 10 MB
-const REQUEST_TIMEOUT_MS  = 30_000;            // 30 seconds
+const REQUEST_TIMEOUT_MS = 75_000;            // 60 seconds (increased from 30)
 
 // Routes that handle large file uploads — skip payload guard + use longer timeout
 const UPLOAD_PATH_PREFIXES = [
@@ -27,6 +27,9 @@ const UPLOAD_PATH_PREFIXES = [
   '/api/bulk',
   '/api/market-sync',
   '/api/files',
+  '/api/export',
+  '/api/asins',
+  '/api/pems',
 ];
 
 function isUploadRoute(path) {
@@ -69,7 +72,7 @@ function requestGuard(req, res, next) {
 
     // Clear the timer once the response is sent so it doesn't fire spuriously
     res.on('finish', () => clearTimeout(timer));
-    res.on('close',  () => clearTimeout(timer));
+    res.on('close', () => clearTimeout(timer));
   }
 
   next();

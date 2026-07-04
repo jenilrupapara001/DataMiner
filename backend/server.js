@@ -164,6 +164,7 @@ const webhookRoutes = require('./routes/webhookRoutes');
 const pemsRoutes = require('./routes/pems/pemsRoutes');
 const pemsDashboardRoutes = require('./routes/pems/dashboardRoutes');
 const pemsLiveSyncRoutes = require('./routes/pems/liveSyncTrackerRoutes');
+const liveDataRoutes = require('./routes/pems/liveDataRoutes');
 
 app.use('/api', dataRoutes);
 app.use('/api', uploadRoutes);
@@ -203,6 +204,7 @@ app.use('/api/targets', targetRoutes);
 app.use('/api/webhooks', webhookRoutes);
 app.use('/api/pems', pemsRoutes);
 app.use('/api/live-sync-tracker', pemsLiveSyncRoutes);
+app.use('/api/live-data', liveDataRoutes);
 
 // Health check endpoint - SQL version
 app.get('/api/health', async (req, res) => {
