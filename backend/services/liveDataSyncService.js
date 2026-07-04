@@ -54,16 +54,14 @@ class LiveDataSyncService extends EventEmitter {
     // Internal: Get global credentials from env
     // ============================================
     _getCredentials() {
-        const cid = process.env.LIVE_SYNC_CLIENT_ID;
-        const cs = process.env.LIVE_SYNC_CLIENT_SECRET;
-        const pt = process.env.LIVE_SYNC_PARTNER_TAG;
-        const mk = process.env.LIVE_SYNC_MARKETPLACE || 'www.amazon.in';
+        const CreatorsApiCredentials = require('./creatorsApiCredentials');
+        const cred = CreatorsApiCredentials.get();
         
-        if (!cid || !cs) {
-            throw new Error('Live Sync credentials not configured. Set LIVE_SYNC_CLIENT_ID and LIVE_SYNC_CLIENT_SECRET in environment.');
+        if (!cred.clientId || !cred.clientSecret) {
+            throw new Error('Live Sync credentials not configured.');
         }
         
-        return { _cid: cid, _cs: cs, _pt: pt, _mk: mk };
+        return { _cid: cred.clientId, _cs: cred.clientSecret, _pt: cred.partnerTag, _mk: cred.marketplace, _credRef: cred };
     }
     
     // ============================================
@@ -393,16 +391,20 @@ class LiveDataSyncService extends EventEmitter {
     // Internal: Get Token (global, cached)
     // ============================================
     async _getToken(creds) {
-        const cached = this._tokens.get('global');
+        const credId = creds._credRef?.id || 'default';
+        const cached = this._tokens.get(credId);
         
         if (cached && Date.now() < cached.exp) {
             return cached.t;
         }
         
+        const CreatorsApiCredentials = require('./creatorsApiCredentials');
+        const cred = CreatorsApiCredentials.get();
+        
         const params = new URLSearchParams();
         params.append('grant_type', 'client_credentials');
-        params.append('client_id', creds._cid);
-        params.append('client_secret', creds._cs);
+        params.append('client_id', cred.clientId);
+        params.append('client_secret', cred.clientSecret);
         params.append('scope', 'creatorsapi::default');
         
         const response = await axios.post(this._config._t, params, {
@@ -410,11 +412,12 @@ class LiveDataSyncService extends EventEmitter {
             timeout: 10000
         });
         
-        this._tokens.set('global', {
+        this._tokens.set(cred.id, {
             t: response.data.access_token,
             exp: Date.now() + (response.data.expires_in * 1000) - 60000
         });
         
+        CreatorsApiCredentials.markSuccess(cred);
         return response.data.access_token;
     }
     
