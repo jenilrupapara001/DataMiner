@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Live Data Inspector v2 — RetailOps</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f8fafc; --surface: #ffffff; --border: #e2e8f0; --border-light: #f1f5f9;
+      --text: #0f172a; --text-secondary: #64748b; --text-muted: #94a3b8;
+      --primary: #7c3aed; --primary-dark: #6d28d9; --primary-light: #f5f3ff;
+      --success: #16a34a; --success-light: #f0fdf4;
+      --danger: #dc2626; --danger-light: #fef2f2;
+      --warning: #d97706; --warning-light: #fffbeb;
+      --shadow-sm: 0 1px 2px rgba(0,0,0,0.04); --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+      --shadow-lg: 0 10px 25px rgba(0,0,0,0.08);
+      --radius: 12px; --radius-sm: 8px;
+      --font: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      --mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: var(--font); background: var(--bg); color: var(--text); min-height: 100vh; -webkit-font-smoothing: antialiased; }
+
+    .header { background: linear-gradient(135deg, #1e3a5f 0%, #7c3aed 50%, #3b82f6 100%); padding: 0 32px; display: flex; align-items: center; justify-content: space-between; height: 64px; position: sticky; top: 0; z-index: 100; backdrop-filter: blur(12px); border-bottom: 1px solid rgba(255,255,255,0.1); }
+    .header-left { display: flex; align-items: center; gap: 14px; }
+    .header-logo { width: 36px; height: 36px; background: rgba(255,255,255,0.15); border-radius: 10px; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(8px); }
+    .header-logo svg { color: #fff; }
+    .header-title { color: #fff; font-size: 16px; font-weight: 700; letter-spacing: -0.02em; }
+    .header-subtitle { color: rgba(255,255,255,0.65); font-size: 11px; font-weight: 500; }
+    .header-right { display: flex; gap: 8px; align-items: center; }
+    .header-badge { background: rgba(255,255,255,0.15); color: rgba(255,255,255,0.9); padding: 5px 12px; border-radius: 20px; font-size: 11px; font-weight: 600; backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.1); }
+    .header-badge.active { background: rgba(34,197,94,0.3); border-color: rgba(34,197,94,0.4); }
+
+    .main { max-width: 1440px; margin: 0 auto; padding: 20px 24px; display: grid; grid-template-columns: 380px 1fr; gap: 20px; align-items: start; }
+    @media (max-width: 1024px) { .main { grid-template-columns: 1fr; } }
+
+    .card { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); border: 1px solid var(--border); overflow: hidden; }
+    .card-head { padding: 16px 20px; border-bottom: 1px solid var(--border-light); display: flex; align-items: center; justify-content: space-between; }
+    .card-head h2 { font-size: 13px; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 8px; }
+    .card-head .icon { width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center; justify-content: center; }
+    .card-head .icon.blue { background: var(--primary-light); color: var(--primary); }
+    .card-head .icon.green { background: var(--success-light); color: var(--success); }
+    .card-body { padding: 20px; }
+
+    .label { display: block; font-size: 11px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+
+    textarea { width: 100%; border: 1.5px solid var(--border); border-radius: var(--radius-sm); padding: 12px 14px; font-family: var(--mono); font-size: 12px; line-height: 1.7; resize: vertical; transition: all 0.15s; outline: none; background: var(--surface); color: var(--text); }
+    textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37,99,235,0.08); }
+    textarea::placeholder { color: var(--text-muted); }
+
+    .input-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
+    .asin-count { font-size: 11px; color: var(--text-muted); font-weight: 500; display: flex; align-items: center; gap: 4px; }
+    .asin-count .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text-muted); }
+    .asin-count.has-data .dot { background: var(--success); }
+
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 18px; border: none; border-radius: var(--radius-sm); font-family: var(--font); font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; position: relative; overflow: hidden; }
+    .btn-primary { background: linear-gradient(135deg, var(--primary), var(--primary-dark)); color: #fff; width: 100%; height: 44px; }
+    .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(37,99,235,0.3); }
+    .btn-primary:active { transform: translateY(0); }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+    .btn-primary .btn-loading { display: none; }
+    .btn-primary.loading .btn-text { display: none; }
+    .btn-primary.loading .btn-loading { display: flex; align-items: center; gap: 8px; }
+    .btn-sm { padding: 6px 12px; font-size: 11px; height: 32px; }
+    .btn-outline { background: transparent; color: var(--primary); border: 1.5px solid var(--primary); }
+    .btn-outline:hover { background: var(--primary-light); }
+    .btn-success { background: var(--success); color: #fff; }
+    .btn-success:hover { background: #15803d; }
+
+    .mini-spinner { width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin 0.7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .metrics-section { margin-top: 20px; }
+    .metrics-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+    .select-all-btn { font-size: 11px; color: var(--primary); cursor: pointer; font-weight: 600; border: none; background: none; font-family: var(--font); padding: 0; }
+    .select-all-btn:hover { text-decoration: underline; }
+    .metrics-grid { display: flex; flex-direction: column; gap: 4px; max-height: 340px; overflow-y: auto; padding-right: 4px; }
+    .metrics-grid::-webkit-scrollbar { width: 4px; }
+    .metrics-grid::-webkit-scrollbar-track { background: transparent; }
+    .metrics-grid::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+    .metric-chip { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1.5px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; transition: all 0.15s; user-select: none; background: var(--surface); }
+    .metric-chip:hover { border-color: #93c5fd; background: #fafcff; }
+    .metric-chip.active { border-color: var(--primary); background: var(--primary-light); }
+    .metric-chip .check { width: 18px; height: 18px; border: 2px solid var(--border); border-radius: 5px; display: flex; align-items: center; justify-content: center; transition: all 0.15s; flex-shrink: 0; }
+    .metric-chip.active .check { background: var(--primary); border-color: var(--primary); }
+    .metric-chip.active .check svg { display: block; }
+    .metric-chip .check svg { display: none; color: #fff; width: 12px; height: 12px; }
+    .metric-chip .info { flex: 1; min-width: 0; }
+    .metric-chip .name { font-size: 12px; font-weight: 600; color: var(--text); }
+    .metric-chip .desc { font-size: 10px; color: var(--text-muted); margin-top: 1px; }
+
+    .result-bar { display: flex; align-items: center; gap: 8px; padding: 10px 20px; background: var(--bg); border-bottom: 1px solid var(--border-light); }
+    .result-chip { padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 600; }
+    .result-chip.success { background: var(--success-light); color: var(--success); }
+    .result-chip.warning { background: var(--warning-light); color: var(--warning); }
+    .result-chip.info { background: var(--primary-light); color: var(--primary); }
+
+    .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 80px 30px; color: var(--text-muted); }
+    .empty-icon { width: 72px; height: 72px; background: var(--bg); border-radius: 20px; display: flex; align-items: center; justify-content: center; margin-bottom: 16px; border: 1px dashed var(--border); }
+    .empty-icon svg { color: var(--text-muted); opacity: 0.5; }
+    .empty-title { font-size: 14px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; }
+    .empty-desc { font-size: 12px; color: var(--text-muted); text-align: center; max-width: 300px; line-height: 1.5; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    thead th { background: var(--bg); border-bottom: 2px solid var(--border); padding: 11px 14px; text-align: left; font-weight: 700; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); white-space: nowrap; position: sticky; top: 0; z-index: 2; }
+    tbody td { padding: 10px 14px; border-bottom: 1px solid var(--border-light); }
+    tbody tr { transition: background 0.1s; }
+    tbody tr:hover { background: #f8fafc; }
+    .cell-asin { font-family: var(--mono); font-size: 10.5px; font-weight: 500; background: var(--bg); padding: 3px 8px; border-radius: 5px; border: 1px solid var(--border); display: inline-block; }
+    .cell-seller { font-weight: 500; color: var(--text-secondary); max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .cell-null { color: var(--text-muted); font-style: italic; }
+    .cell-num { font-family: var(--mono); font-weight: 500; font-size: 11.5px; }
+    .cell-str { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    .table-scroll { max-height: calc(100vh - 220px); overflow: auto; }
+    .table-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+    .table-scroll::-webkit-scrollbar-track { background: transparent; }
+    .table-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 6px; }
+
+    .overlay { display: none; position: absolute; inset: 0; background: rgba(255,255,255,0.88); z-index: 10; flex-direction: column; align-items: center; justify-content: center; border-radius: var(--radius); backdrop-filter: blur(2px); }
+    .overlay.active { display: flex; }
+    .overlay-spinner { width: 40px; height: 40px; border: 3px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite; }
+    .overlay-text { margin-top: 14px; font-size: 13px; color: var(--text-secondary); font-weight: 500; }
+    .overlay-sub { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+
+    .not-found-section { padding: 16px 20px; border-top: 1px solid var(--border-light); background: #fffdf5; }
+    .not-found-title { font-size: 11px; font-weight: 700; color: var(--warning); margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+    .not-found-list { display: flex; flex-wrap: wrap; gap: 6px; }
+    .not-found-item { font-family: var(--mono); font-size: 10px; background: var(--warning-light); color: var(--warning); padding: 3px 8px; border-radius: 5px; border: 1px solid rgba(217,119,6,0.15); }
+
+    .toast { position: fixed; top: 80px; right: 24px; padding: 12px 20px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 600; z-index: 9999; transform: translateX(120%); transition: transform 0.3s cubic-bezier(0.4,0,0.2,1); box-shadow: var(--shadow-lg); display: flex; align-items: center; gap: 8px; }
+    .toast.show { transform: translateX(0); }
+    .toast.success { background: #15803d; color: #fff; }
+    .toast.error { background: #b91c1c; color: #fff; }
+    .toast.warning { background: #b45309; color: #fff; }
+
+    .keyboard-hint { font-size: 10px; color: var(--text-muted); text-align: center; margin-top: 10px; }
+    .keyboard-hint kbd { background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; font-family: var(--mono); font-size: 10px; }
+
+    .history-bar { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
+    .history-chip { font-family: var(--mono); font-size: 10px; background: var(--bg); border: 1px solid var(--border); padding: 3px 8px; border-radius: 5px; cursor: pointer; color: var(--text-secondary); transition: all 0.1s; }
+    .history-chip:hover { border-color: var(--primary); color: var(--primary); background: var(--primary-light); }
+
+    .upload-zone { border: 2px dashed var(--border); border-radius: var(--radius); padding: 28px 20px; text-align: center; cursor: pointer; transition: all 0.2s; background: var(--bg); margin-bottom: 16px; }
+    .upload-zone:hover, .upload-zone.dragover { border-color: var(--primary); background: var(--primary-light); }
+    .upload-zone svg { color: var(--text-muted); margin-bottom: 8px; }
+    .upload-zone .uz-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 2px; }
+    .upload-zone .uz-sub { font-size: 11px; color: var(--text-muted); }
+    .upload-zone .uz-formats { font-size: 10px; color: var(--text-muted); margin-top: 8px; display: flex; gap: 6px; justify-content: center; }
+    .upload-zone .uz-formats span { background: var(--surface); border: 1px solid var(--border); padding: 2px 8px; border-radius: 4px; font-weight: 600; }
+    .upload-zone.has-file { border-color: var(--success); background: var(--success-light); border-style: solid; }
+    .upload-zone.has-file .uz-title { color: var(--success); }
+
+    .progress-section { margin-top: 16px; display: none; }
+    .progress-section.active { display: block; }
+    .progress-bar-bg { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; margin: 10px 0; }
+    .progress-bar-fill { height: 100%; background: linear-gradient(90deg, var(--primary), #60a5fa); border-radius: 4px; transition: width 0.5s ease; width: 0%; }
+    .progress-bar-fill.complete { background: var(--success); }
+    .progress-bar-fill.error { background: var(--danger); }
+    .progress-stats { display: flex; gap: 16px; font-size: 11px; color: var(--text-secondary); }
+    .progress-stats .ps-val { font-weight: 700; color: var(--text); }
+    .progress-actions { display: flex; gap: 8px; margin-top: 12px; }
+
+    .tabs { display: flex; gap: 0; margin-bottom: 16px; border-bottom: 2px solid var(--border); }
+    .tab { padding: 10px 18px; font-size: 12px; font-weight: 600; color: var(--text-muted); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; transition: all 0.15s; }
+    .tab:hover { color: var(--text-secondary); }
+    .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <div class="header-logo">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+    </div>
+    <div>
+      <div class="header-title">Live Data Inspector v2</div>
+      <div class="header-subtitle">Secondary credential — dedicated API key</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <span class="header-badge" id="apiStatus">Connecting...</span>
+    <span class="header-badge" id="storageBadge" title="IndexedDB storage"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 10h20"/></svg> --</span>
+    <button class="btn btn-success btn-sm" id="exportBtn" style="display:none" onclick="exportXLSX()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+      Export XLSX
+    </button>
+    <button class="btn btn-outline btn-sm" id="csvBtn" style="display:none" onclick="exportCSV()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      CSV
+    </button>
+  </div>
+</div>
+
+<div class="main">
+  <div>
+      <div class="card">
+        <div class="card-head">
+          <h2>
+            <span class="icon blue"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg></span>
+            ASIN Input
+          </h2>
+          <span class="asin-count" id="asinCount"><span class="dot"></span>0 ASINs</span>
+        </div>
+        <div class="card-body">
+          <div class="tabs">
+            <div class="tab active" onclick="switchTab('manual')">Manual Input</div>
+            <div class="tab" onclick="switchTab('upload')">File Upload</div>
+          </div>
+
+          <!-- Manual Input Tab -->
+          <div class="tab-content active" id="tab-manual">
+            <label class="label">Paste ASINs below</label>
+            <textarea id="asinInput" rows="7" placeholder="One per line or comma-separated&#10;&#10;B08FGPZNR6&#10;B09R9BGH3P&#10;B0D44SP9D7, B0GN39631B"></textarea>
+            <div class="input-footer">
+              <span class="asin-count" style="margin-top:0">Supports Amazon.in ASINs</span>
+            </div>
+            <div style="margin-top:16px">
+              <button class="btn btn-primary" id="fetchBtn" onclick="fetchData()">
+                <span class="btn-text"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg> Fetch Live Data</span>
+                <span class="btn-loading"><div class="mini-spinner"></div> Fetching...</span>
+              </button>
+              <div class="keyboard-hint">Press <kbd>Ctrl</kbd>+<kbd>Enter</kbd> to fetch</div>
+            </div>
+          </div>
+
+          <!-- File Upload Tab -->
+          <div class="tab-content" id="tab-upload">
+            <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
+              <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" style="display:none" onchange="handleFileSelect(event)">
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+              <div class="uz-title" id="uzTitle">Drop file here or click to browse</div>
+              <div class="uz-sub" id="uzSub">Upload CSV or Excel with ASIN column</div>
+              <div class="uz-formats"><span>CSV</span><span>XLSX</span><span>XLS</span></div>
+            </div>
+            <div style="font-size:11px;color:var(--text-muted);margin-bottom:12px;line-height:1.6">
+              File should have at least one column with ASIN codes (B0XXXXXXXX format). All columns are auto-detected.
+            </div>
+            <div class="progress-section" id="progressSection">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+                <span style="font-size:12px;font-weight:600;color:var(--text)" id="progressLabel">Processing...</span>
+                <span style="font-size:12px;font-weight:700;color:var(--primary)" id="progressPercent">0%</span>
+              </div>
+              <div class="progress-bar-bg"><div class="progress-bar-fill" id="progressBar"></div></div>
+              <div class="progress-stats">
+                <span><span class="ps-val" id="psProcessed">0</span> / <span id="psTotal">0</span> processed</span>
+                <span><span class="ps-val" id="psFound" style="color:var(--success)">0</span> found</span>
+                <span><span class="ps-val" id="psNotFound" style="color:var(--warning)">0</span> not found</span>
+              </div>
+              <div class="progress-actions" id="progressActions">
+                <button class="btn btn-outline btn-sm" onclick="cancelJob()" id="cancelBtn">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg> Cancel
+                </button>
+              </div>
+              <div class="progress-actions" id="downloadActions" style="display:none">
+                <button class="btn btn-success btn-sm" onclick="downloadJobResults()">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg> Download XLSX
+                </button>
+                <button class="btn btn-outline btn-sm" onclick="loadJobResults()">View Results</button>
+              </div>
+            </div>
+            <div style="font-size:10px;color:var(--text-muted);text-align:center;margin-top:8px">Max 50,000 ASINs per file. Processing takes ~1.1s per batch of 10.</div>
+          </div>
+
+          <div id="historySection" style="display:none">
+            <div class="metrics-header" style="margin-top:16px;margin-bottom:6px">
+              <span class="label" style="margin:0">Recent Searches</span>
+              <button class="select-all-btn" onclick="clearHistory()">Clear</button>
+            </div>
+            <div class="history-bar" id="historyBar"></div>
+          </div>
+
+          <div id="savedHistory" style="display:none;margin-top:16px"></div>
+
+          <div class="metrics-section">
+            <div class="metrics-header">
+              <span class="label" style="margin:0">Select Metrics</span>
+              <button class="select-all-btn" id="selectAllBtn" onclick="toggleSelectAll()">Select All</button>
+            </div>
+            <div class="metrics-grid" id="metricsGrid">
+              <div style="text-align:center;padding:24px;color:var(--text-muted);font-size:12px">Loading metrics...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+  </div>
+
+  <div class="card" style="position:relative;min-height:500px">
+    <div class="card-head">
+      <h2>
+        <span class="icon green"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg></span>
+        Results
+      </h2>
+      <div style="display:flex;gap:6px;align-items:center" id="resultBadges"></div>
+    </div>
+    <div class="result-bar" id="resultBar" style="display:none"></div>
+    <div class="overlay" id="loadingOverlay">
+      <div class="overlay-spinner"></div>
+      <div class="overlay-text">Fetching live data...</div>
+      <div class="overlay-sub">Querying Amazon Creators API</div>
+    </div>
+    <div id="resultsContainer">
+      <div class="empty-state">
+        <div class="empty-icon">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+        </div>
+        <div class="empty-title">No data yet</div>
+        <div class="empty-desc">Enter ASINs in the input panel, select your metrics, and click Fetch to see real-time product data</div>
+      </div>
+    </div>
+    <div id="notFoundContainer"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script>
+const API = window.location.origin + '/api';
+let allMetrics = [], selectedKeys = [], results = [], notFound = [];
+let searchHistory = JSON.parse(localStorage.getItem('ldi_history') || '[]');
+let currentJobId = null, progressInterval = null, selectedFile = null;
+let db = null;
+const DB_NAME = 'LiveDataInspector';
+const DB_VERSION = 1;
+const STORE_RESULTS = 'results';
+const STORE_JOBS = 'jobs';
+const STORE_SETTINGS = 'settings';
+const MAX_DB_SIZE_MB = 50;
+
+function openDB() {
+  return new Promise((resolve, reject) => {
+    if (db) return resolve(db);
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = e => {
+      const d = e.target.result;
+      if (!d.objectStoreNames.contains(STORE_RESULTS)) d.createObjectStore(STORE_RESULTS, { keyPath: 'id' });
+      if (!d.objectStoreNames.contains(STORE_JOBS)) d.createObjectStore(STORE_JOBS, { keyPath: 'id' });
+      if (!d.objectStoreNames.contains(STORE_SETTINGS)) d.createObjectStore(STORE_SETTINGS, { keyPath: 'key' });
+    };
+    req.onsuccess = e => { db = e.target.result; db.onerror = e => console.warn('IndexedDB error:', e.target.error); resolve(db); };
+    req.onerror = e => { console.warn('IndexedDB open failed:', e.target.error); resolve(null); };
+  });
+}
+
+async function dbPut(store, data) {
+  const d = await openDB();
+  if (!d) return;
+  return new Promise((resolve, reject) => {
+    try {
+      const tx = d.transaction(store, 'readwrite');
+      tx.objectStore(store).put(data);
+      tx.oncomplete = () => resolve();
+      tx.onerror = e => { console.warn('DB put error:', e.target.error); resolve(); };
+    } catch { resolve(); }
+  });
+}
+
+async function dbGet(store, key) {
+  const d = await openDB();
+  if (!d) return null;
+  return new Promise((resolve) => {
+    try {
+      const tx = d.transaction(store, 'readonly');
+      const req = tx.objectStore(store).get(key);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => resolve(null);
+    } catch { resolve(null); }
+  });
+}
+
+async function dbGetAll(store) {
+  const d = await openDB();
+  if (!d) return [];
+  return new Promise((resolve) => {
+    try {
+      const tx = d.transaction(store, 'readonly');
+      const req = tx.objectStore(store).getAll();
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror = () => resolve([]);
+    } catch { resolve([]); }
+  });
+}
+
+async function dbDelete(store, key) {
+  const d = await openDB();
+  if (!d) return;
+  return new Promise((resolve) => {
+    try {
+      const tx = d.transaction(store, 'readwrite');
+      tx.objectStore(store).delete(key);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+    } catch { resolve(); }
+  });
+}
+
+async function dbClear(store) {
+  const d = await openDB();
+  if (!d) return;
+  return new Promise((resolve) => {
+    try {
+      const tx = d.transaction(store, 'readwrite');
+      tx.objectStore(store).clear();
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+    } catch { resolve(); }
+  });
+}
+
+async function saveResultsToDB(id, data) {
+  await dbPut(STORE_RESULTS, { id, ...data, savedAt: Date.now() });
+  checkStorage();
+}
+
+async function loadResultsFromDB(id) {
+  return await dbGet(STORE_RESULTS, id);
+}
+
+async function getAllSavedResults() {
+  return await dbGetAll(STORE_RESULTS);
+}
+
+async function deleteSavedResult(id) {
+  await dbDelete(STORE_RESULTS, id);
+}
+
+async function clearAllResults() {
+  await dbClear(STORE_RESULTS);
+  await dbClear(STORE_JOBS);
+  toast('All saved data cleared', 'success');
+}
+
+async function checkStorage() {
+  if (!navigator.storage || !navigator.storage.estimate) return;
+  try {
+    const est = await navigator.storage.estimate();
+    const usedMB = (est.usage / 1024 / 1024).toFixed(1);
+    const quotaMB = (est.quota / 1024 / 1024).toFixed(0);
+    const pct = ((est.usage / est.quota) * 100).toFixed(1);
+    updateStorageBadge(usedMB, quotaMB, pct);
+    if (pct > 80) {
+      toast(`Storage ${pct}% full (${usedMB}MB/${quotaMB}MB). Consider clearing old data.`, 'warning');
+    }
+  } catch {}
+}
+
+function updateStorageBadge(used, total, pct) {
+  const el = document.getElementById('storageBadge');
+  if (!el) return;
+  const color = pct > 80 ? 'var(--danger)' : pct > 50 ? 'var(--warning)' : 'var(--text-muted)';
+  el.innerHTML = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 10h20"/></svg> ${used}MB`;
+  el.title = `IndexedDB: ${used}MB used of ${total}MB (${pct}%)`;
+}
+
+function renderSavedHistory() {
+  const container = document.getElementById('savedHistory');
+  if (!container) return;
+  getAllSavedResults().then(items => {
+    if (!items.length) { container.style.display = 'none'; return; }
+    container.style.display = '';
+    container.innerHTML = `<div class="metrics-header" style="margin-bottom:8px"><span class="label" style="margin:0">Saved Results (${items.length})</span><div style="display:flex;gap:6px"><button class="select-all-btn" style="color:var(--danger)" onclick="clearAllResults().then(() => renderSavedHistory())">Clear All</button></div></div><div style="display:flex;flex-direction:column;gap:4px;max-height:140px;overflow-y:auto">${items.sort((a,b) => b.savedAt - a.savedAt).map(item => {
+      const date = new Date(item.savedAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+      return `<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;cursor:pointer" onclick="loadSavedResult('${item.id}')"><div><div style="font-size:11px;font-weight:600;color:var(--text)">${item.total || 0} ASINs</div><div style="font-size:10px;color:var(--text-muted)">${date}</div></div><div style="display:flex;gap:4px"><button class="btn btn-outline btn-sm" style="height:22px;font-size:9px;padding:0 6px" onclick="event.stopPropagation();loadSavedResult('${item.id}')">Load</button><button class="btn btn-sm" style="height:22px;font-size:9px;padding:0 6px;background:var(--danger-light);color:var(--danger);border:1px solid rgba(220,38,38,0.2)" onclick="event.stopPropagation();deleteSavedResult('${item.id}').then(() => renderSavedHistory())">Del</button></div></div>`;
+    }).join('')}</div>`;
+  });
+}
+
+async function loadSavedResult(id) {
+  const item = await loadResultsFromDB(id);
+  if (!item) return toast('Saved result not found', 'warning');
+  results = item.data || [];
+  notFound = item.notFound || [];
+  selectedKeys = item.metrics || selectedKeys;
+  renderResults(); renderMetrics();
+  document.getElementById('exportBtn').style.display = results.length ? '' : 'none';
+  document.getElementById('csvBtn').style.display = results.length ? '' : 'none';
+  switchTab('manual');
+  toast(`Loaded ${results.length} saved ASINs`, 'success');
+}
+
+const METRIC_META = {
+  price: { desc: 'Current selling price', icon: '\u20B9' }, mrp: { desc: 'Maximum retail price', icon: '\u20B9' },
+  bsr: { desc: 'Best Seller Rank', icon: '#' }, subBsr: { desc: 'Sub-category BSR', icon: '#' },
+  rating: { desc: 'Customer rating', icon: '/5' }, reviewCount: { desc: 'Total reviews' },
+  buyBoxWinner: { desc: 'BuyBox status' }, seller: { desc: 'BuyBox seller' },
+  availability: { desc: 'Stock status' }, title: { desc: 'Product title' },
+  brand: { desc: 'Brand name' }, category: { desc: 'Product category' }, dealBadge: { desc: 'Active deal type' },
+};
+
+async function init() {
+  try {
+    const r = await fetch(API + '/live-data/metrics').then(r => r.json());
+    if (r.success && r.data) { allMetrics = r.data; selectedKeys = r.data.map(m => m.key); renderMetrics();
+      document.getElementById('apiStatus').textContent = 'API Connected'; document.getElementById('apiStatus').classList.add('active'); }
+  } catch (e) {
+    document.getElementById('metricsGrid').innerHTML = '<div style="text-align:center;padding:20px;color:var(--danger);font-size:12px">Failed to load metrics</div>';
+    document.getElementById('apiStatus').textContent = 'API Offline';
+  }
+  renderHistory();
+  setupDragDrop();
+  openDB().then(() => { checkStorage(); renderSavedHistory(); });
+}
+
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', (tab === 'manual' && i === 0) || (tab === 'upload' && i === 1)));
+  document.getElementById('tab-manual').classList.toggle('active', tab === 'manual');
+  document.getElementById('tab-upload').classList.toggle('active', tab === 'upload');
+}
+
+function setupDragDrop() {
+  const z = document.getElementById('uploadZone');
+  ['dragenter', 'dragover'].forEach(e => z.addEventListener(e, ev => { ev.preventDefault(); z.classList.add('dragover'); }));
+  ['dragleave', 'drop'].forEach(e => z.addEventListener(e, ev => { ev.preventDefault(); z.classList.remove('dragover'); }));
+  z.addEventListener('drop', ev => { if (ev.dataTransfer.files.length) handleFile(ev.dataTransfer.files[0]); });
+}
+
+function handleFileSelect(e) { if (e.target.files.length) handleFile(e.target.files[0]); }
+
+function handleFile(file) {
+  const ext = file.name.split('.').pop().toLowerCase();
+  if (!['csv', 'xlsx', 'xls'].includes(ext)) return toast('Only CSV, XLSX, XLS files supported', 'warning');
+  selectedFile = file;
+  document.getElementById('uploadZone').classList.add('has-file');
+  document.getElementById('uzTitle').textContent = file.name;
+  document.getElementById('uzSub').textContent = `${(file.size / 1024).toFixed(1)} KB \u2022 Uploading...`;
+  uploadFile();
+}
+
+function renderMetrics() {
+  const grid = document.getElementById('metricsGrid');
+  grid.innerHTML = allMetrics.map(m => {
+    const active = selectedKeys.includes(m.key);
+    return `<div class="metric-chip ${active ? 'active' : ''}" onclick="toggleMetric('${m.key}')">
+      <div class="check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
+      <div class="info"><div class="name">${m.label}</div><div class="desc">${METRIC_META[m.key]?.desc || ''}</div></div>
+    </div>`;
+  }).join('');
+  document.getElementById('selectAllBtn').textContent = selectedKeys.length === allMetrics.length ? 'Deselect All' : selectedKeys.length === 0 ? 'Select All' : `Select All (${selectedKeys.length}/${allMetrics.length})`;
+}
+function toggleMetric(k) { selectedKeys.includes(k) ? selectedKeys = selectedKeys.filter(x => x !== k) : selectedKeys.push(k); renderMetrics(); }
+function toggleSelectAll() { selectedKeys = selectedKeys.length === allMetrics.length ? [] : allMetrics.map(m => m.key); renderMetrics(); }
+
+document.getElementById('asinInput').addEventListener('input', function() {
+  const n = parseAsins(this.value).length;
+  const el = document.getElementById('asinCount'); el.innerHTML = `<span class="dot"></span>${n} ASIN${n !== 1 ? 's' : ''}`; el.className = n > 0 ? 'asin-count has-data' : 'asin-count';
+});
+document.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); fetchData(); } });
+function parseAsins(v) { return v.split(/[\n,]+/).map(a => a.trim().toUpperCase()).filter(a => a.length >= 5); }
+
+async function fetchData() {
+  const asins = parseAsins(document.getElementById('asinInput').value);
+  if (!asins.length) return toast('Enter at least one ASIN', 'warning');
+  if (!selectedKeys.length) return toast('Select at least one metric', 'warning');
+  if (asins.length > 100) return toast('Maximum 100 ASINs per request', 'warning');
+  const btn = document.getElementById('fetchBtn'); btn.disabled = true; btn.classList.add('loading');
+  document.getElementById('loadingOverlay').classList.add('active');
+  try {
+    const r = await fetch(API + '/live-data/v2/fetch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ asins, metrics: selectedKeys, credId: 'secondary' }) }).then(r => r.json());
+    if (r.success) { results = r.data || []; notFound = r.notFound || []; renderResults();
+      document.getElementById('exportBtn').style.display = results.length ? '' : 'none'; document.getElementById('csvBtn').style.display = results.length ? '' : 'none';
+      toast(`Fetched ${results.length} ASINs`, 'success'); saveHistory(asins.slice(0, 3).join(', ') + (asins.length > 3 ? ` +${asins.length - 3}` : ''));
+      if (results.length || notFound.length) saveResultsToDB('fetch_' + Date.now(), { data: results, notFound, metrics: selectedKeys, total: results.length + notFound.length }).then(() => renderSavedHistory()); }
+    else toast(r.error || 'Fetch failed', 'error');
+  } catch (e) { toast('Network error: ' + e.message, 'error'); }
+  finally { btn.disabled = false; btn.classList.remove('loading'); document.getElementById('loadingOverlay').classList.remove('active'); }
+}
+
+// ── File upload + batch processing ──────────────
+async function uploadFile() {
+  if (!selectedFile) return toast('Select a file first', 'warning');
+  if (!selectedKeys.length) return toast('Select at least one metric', 'warning');
+  const fd = new FormData(); fd.append('file', selectedFile); fd.append('metrics', JSON.stringify(selectedKeys)); fd.append('credId', 'secondary');
+  try {
+    const r = await fetch(API + '/live-data/v2/upload', { method: 'POST', body: fd }).then(r => r.json());
+    if (r.success) {
+      currentJobId = r.jobId;
+      document.getElementById('progressSection').classList.add('active');
+      document.getElementById('progressActions').style.display = '';
+      document.getElementById('downloadActions').style.display = 'none';
+      document.getElementById('psTotal').textContent = r.totalAsins.toLocaleString();
+      document.getElementById('progressLabel').textContent = `Processing ${r.totalAsins.toLocaleString()} ASINs...`;
+      toast(`Job started: ${r.totalAsins.toLocaleString()} ASINs (~${r.estimatedMinutes} min)`, 'success');
+      startProgressPolling();
+    } else toast(r.error || 'Upload failed', 'error');
+  } catch (e) { toast('Upload error: ' + e.message, 'error'); }
+}
+
+function startProgressPolling() {
+  if (progressInterval) clearInterval(progressInterval);
+  progressInterval = setInterval(pollProgress, 3000);
+  pollProgress();
+}
+
+async function pollProgress() {
+  if (!currentJobId) return;
+  try {
+    const r = await fetch(API + `/live-data/v2/progress/${currentJobId}`).then(r => r.json());
+    if (!r.success) return;
+    const d = r.data;
+    document.getElementById('progressPercent').textContent = d.percent + '%';
+    document.getElementById('progressBar').style.width = d.percent + '%';
+    document.getElementById('psProcessed').textContent = d.processed.toLocaleString();
+    document.getElementById('psFound').textContent = d.found.toLocaleString();
+    document.getElementById('psNotFound').textContent = d.notFound.toLocaleString();
+    if (d.status === 'completed') {
+      clearInterval(progressInterval); progressInterval = null;
+      document.getElementById('progressBar').classList.add('complete');
+      document.getElementById('progressLabel').textContent = 'Completed!';
+      document.getElementById('progressActions').style.display = 'none';
+      document.getElementById('downloadActions').style.display = '';
+      document.getElementById('exportBtn').style.display = ''; document.getElementById('csvBtn').style.display = '';
+      toast(`Done! Found ${d.found} of ${d.totalAsins} ASINs`, 'success');
+    } else if (d.status === 'failed' || d.status === 'cancelled') {
+      clearInterval(progressInterval); progressInterval = null;
+      document.getElementById('progressBar').classList.add('error');
+      document.getElementById('progressLabel').textContent = d.status === 'cancelled' ? 'Cancelled' : 'Failed: ' + (d.error || 'Unknown error');
+      document.getElementById('progressActions').style.display = 'none';
+    }
+  } catch (e) { /* keep polling */ }
+}
+
+async function cancelJob() {
+  if (!currentJobId) return;
+  await fetch(API + `/live-data/v2/cancel/${currentJobId}`, { method: 'POST' });
+  toast('Job cancelled', 'warning');
+}
+
+async function downloadJobResults() {
+  if (!currentJobId) return;
+  window.location.href = API + `/live-data/v2/download/${currentJobId}`;
+  toast('Downloading...', 'success');
+}
+
+async function loadJobResults() {
+  if (!currentJobId) return;
+  try {
+    const r = await fetch(API + `/live-data/v2/results/${currentJobId}`).then(r => r.json());
+    if (r.success) { results = r.data || []; notFound = r.notFound || []; renderResults(); switchTab('manual');
+      document.getElementById('exportBtn').style.display = results.length ? '' : 'none'; document.getElementById('csvBtn').style.display = results.length ? '' : 'none';
+      if (results.length || notFound.length) saveResultsToDB('upload_' + Date.now(), { data: results, notFound, metrics: selectedKeys, total: results.length + notFound.length }).then(() => renderSavedHistory()); }
+  } catch (e) { toast('Failed to load results', 'error'); }
+}
+
+function renderResults() {
+  const c = document.getElementById('resultsContainer'), bar = document.getElementById('resultBar');
+  const badges = document.getElementById('resultBadges'), nf = document.getElementById('notFoundContainer');
+  if (!results.length && !notFound.length) {
+    c.innerHTML = `<div class="empty-state"><div class="empty-icon"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg></div><div class="empty-title">No results found</div><div class="empty-desc">The API returned no data for these ASINs</div></div>`;
+    bar.style.display = 'none'; badges.innerHTML = ''; nf.innerHTML = ''; return;
+  }
+  badges.innerHTML = `<span class="result-chip success">${results.length} found</span>${notFound.length ? `<span class="result-chip warning">${notFound.length} not found</span>` : ''}`;
+  bar.style.display = results.length ? '' : 'none';
+  bar.innerHTML = `<span class="result-chip info">${selectedKeys.length} metrics</span><span class="result-chip info">${results.length} ASINs</span>${notFound.length ? `<span class="result-chip warning">${notFound.length} unavailable</span>` : ''}`;
+  const numKeys = new Set(['price','mrp','bsr','subBsr','rating','reviewCount']);
+  const ths = ['ASIN', 'Seller', ...selectedKeys.map(k => allMetrics.find(m => m.key === k)?.label || k)];
+  const rows = results.map(row => {
+    const tds = [`<td><span class="cell-asin">${esc(row.asin)}</span></td>`, `<td class="cell-seller">${esc(row.seller || '-')}</td>`,
+      ...selectedKeys.map(k => { const v = row[k]; if (v === null || v === undefined) return '<td class="cell-null">&mdash;</td>';
+        if (numKeys.has(k)) return `<td class="cell-num">${typeof v === 'number' ? v.toLocaleString('en-IN') : esc(String(v))}</td>`;
+        return `<td class="cell-str" title="${esc(String(v))}">${esc(String(v))}</td>`; })];
+    return '<tr>' + tds.join('') + '</tr>';
+  }).join('');
+  c.innerHTML = `<div class="table-scroll"><table><thead><tr>${ths.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>`;
+  if (notFound.length) nf.innerHTML = `<div class="not-found-section"><div style="display:flex;align-items:center;justify-content:space-between"><div class="not-found-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg> Not found (${notFound.length})</div><button class="btn btn-outline btn-sm" style="font-size:10px;height:26px;padding:3px 10px;border-color:var(--warning);color:var(--warning)" onclick="exportNotFound()"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg> Export List</button></div><div class="not-found-list">${notFound.map(n => `<span class="not-found-item" title="${esc(n.reason || '')}">${esc(n.asin)}</span>`).join('')}</div></div>`;
+  else nf.innerHTML = '';
+}
+
+function exportXLSX() { if (!results.length) return; const ws = XLSX.utils.json_to_sheet(results); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Live Data'); if (notFound.length) { const nfWs = XLSX.utils.json_to_sheet(notFound.map(n => ({ asin: n.asin, reason: n.reason || '' }))); XLSX.utils.book_append_sheet(wb, nfWs, 'Not Found'); } XLSX.writeFile(wb, `live_data_${new Date().toISOString().slice(0,10)}.xlsx`); toast('Exported to XLSX', 'success'); }
+function exportCSV() { if (!results.length) return; const ws = XLSX.utils.json_to_sheet(results); const csv = XLSX.utils.sheet_to_csv(ws); const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `live_data_${new Date().toISOString().slice(0,10)}.csv`; a.click(); toast('Exported to CSV', 'success'); }
+function exportNotFound() { if (!notFound.length) return; const ws = XLSX.utils.json_to_sheet(notFound.map(n => ({ asin: n.asin, reason: n.reason || '' }))); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Not Found ASINs'); XLSX.writeFile(wb, `not_found_asins_${new Date().toISOString().slice(0,10)}.xlsx`); toast(`Exported ${notFound.length} not found ASINs`, 'success'); }
+
+function saveHistory(text) { searchHistory = [text, ...searchHistory.filter(h => h !== text)].slice(0, 5); localStorage.setItem('ldi_history', JSON.stringify(searchHistory)); renderHistory(); }
+function renderHistory() { const s = document.getElementById('historySection'), b = document.getElementById('historyBar'); if (!searchHistory.length) { s.style.display = 'none'; return; } s.style.display = ''; b.innerHTML = searchHistory.map(h => `<span class="history-chip" onclick="copyHistory('${esc(h)}')">${esc(h)}</span>`).join(''); }
+function clearHistory() { searchHistory = []; localStorage.removeItem('ldi_history'); renderHistory(); }
+function copyHistory(t) { navigator.clipboard?.writeText(t); toast('Copied', 'success'); }
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+function toast(msg, type) { const t = document.getElementById('toast'); t.textContent = msg; t.className = `toast ${type} show`; setTimeout(() => t.classList.remove('show'), 3000); }
+init();
+</script>
+</body>
+</html>

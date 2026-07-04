@@ -15,4 +15,12 @@ router.get('/download/:jobId', ctrl.downloadResults);
 router.post('/cancel/:jobId', ctrl.cancelJob);
 router.get('/creds-stats', (req, res) => res.json({ success: true, data: CreatorsApiCredentials.getStats() }));
 
+// V2 — locked to secondary credential only
+router.post('/v2/fetch', ctrl.fetchLiveDataV2);
+router.post('/v2/upload', upload.single('file'), ctrl.uploadAndProcessV2);
+router.get('/v2/progress/:jobId', ctrl.getProgressV2);
+router.get('/v2/results/:jobId', ctrl.getResultsV2);
+router.get('/v2/download/:jobId', ctrl.downloadResultsV2);
+router.post('/v2/cancel/:jobId', ctrl.cancelJobV2);
+
 module.exports = router;

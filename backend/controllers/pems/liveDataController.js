@@ -95,9 +95,12 @@ function getCreds() {
     };
 }
 
-async function getToken() {
-    const cred = CreatorsApiCredentials.get();
-    const cached = TOKEN_CACHE.get(cred.id);
+async function getToken(credId) {
+    const cred = credId
+        ? CreatorsApiCredentials.credentials.find(c => c.id === credId) || CreatorsApiCredentials.get()
+        : CreatorsApiCredentials.get();
+    const cacheKey = cred.id;
+    const cached = TOKEN_CACHE.get(cacheKey);
     if (cached && Date.now() < cached.expiry) return cached.token;
 
     const r = await axios.post('https://api.amazon.co.uk/auth/o2/token', new URLSearchParams({
@@ -106,7 +109,7 @@ async function getToken() {
     }), { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 10000 });
 
     const token = r.data.access_token;
-    TOKEN_CACHE.set(cred.id, { token, expiry: Date.now() + (r.data.expires_in * 1000) - 120000 });
+    TOKEN_CACHE.set(cacheKey, { token, expiry: Date.now() + (r.data.expires_in * 1000) - 120000 });
     CreatorsApiCredentials.markSuccess(cred);
     return token;
 }
@@ -209,7 +212,7 @@ exports.getMetrics = (req, res) => {
 
 exports.fetchLiveData = async (req, res) => {
     try {
-        const { asins, metrics } = req.body;
+        const { asins, metrics, credId } = req.body;
         if (!asins || !Array.isArray(asins) || asins.length === 0)
             return res.status(400).json({ success: false, error: 'ASINs array required' });
         if (!metrics || !Array.isArray(metrics) || metrics.length === 0)
@@ -222,14 +225,13 @@ exports.fetchLiveData = async (req, res) => {
             return res.status(400).json({ success: false, error: 'No valid metrics selected' });
 
         const asinList = asins.map(a => a.toUpperCase().trim());
-
-        const asinController = require('../../controllers/asinController');
+        const targetCredId = credId || null;
 
         if (CreatorsApiCredentials.count === 0)
             return res.status(500).json({ success: false, error: 'Live Sync credentials not configured on server' });
 
         const creds = getCreds();
-        const token = await getToken();
+        const token = await getToken(targetCredId);
 
         const BATCH_SIZE = 10;
         const results = [];
@@ -348,7 +350,7 @@ exports.uploadAndProcess = async (req, res) => {
         };
         await saveJob(job);
 
-        processJob(jobId, asinList, selectedMetrics).catch(async (err) => {
+        processJob(jobId, asinList, selectedMetrics, req.body._credId || req.body.credId || null).catch(async (err) => {
             console.error(`Job ${jobId} failed:`, err.message);
             const j = await loadJob(jobId);
             if (j) { j.status = 'failed'; j.error = err.message; j.completedAt = new Date().toISOString(); await saveJob(j); }
@@ -430,11 +432,11 @@ const BASE_BATCH_DELAY = 1500; // 1.5s between batches
 const RATE_LIMIT_DELAY = 30000; // 30s on 429
 const STALE_DELAY = 5000; // 5s after any error before next batch
 
-async function processJob(jobId, asinList, selectedMetrics) {
+async function processJob(jobId, asinList, selectedMetrics, credId) {
     if (CreatorsApiCredentials.count === 0) throw new Error('Live Sync credentials not configured');
 
     const creds = getCreds();
-    let token = await getToken();
+    let token = await getToken(credId);
     let tokenExpiry = Date.now() + 3600000;
     let results = [];
     let notFoundList = [];
@@ -450,7 +452,7 @@ async function processJob(jobId, asinList, selectedMetrics) {
 
         // Refresh token if expired or about to expire
         if (Date.now() > tokenExpiry - 120000) {
-            try { token = await getToken(); tokenExpiry = Date.now() + 3600000; consecutiveErrors = 0; } catch { }
+            try { token = await getToken(credId); tokenExpiry = Date.now() + 3600000; consecutiveErrors = 0; } catch { }
         }
 
         // Retry loop — up to MAX_BATCH_RETRIES attempts
@@ -490,14 +492,14 @@ async function processJob(jobId, asinList, selectedMetrics) {
                     console.log(`Rate limited (429) on batch ${i / BATCH_SIZE + 1}, rotating credential, waiting ${waitMs / 1000}s...`);
                     TOKEN_CACHE.clear(); // Force new credential selection
                     await new Promise(r => setTimeout(r, waitMs));
-                    try { token = await getToken(); tokenExpiry = Date.now() + 3600000; } catch { }
+                    try { token = await getToken(credId); tokenExpiry = Date.now() + 3600000; } catch { }
                     continue; // retry same batch
                 }
 
                 if (isAuth) {
                     console.log(`Auth error (${status}) on batch ${i / BATCH_SIZE + 1}, rotating credential...`);
                     TOKEN_CACHE.clear(); // Force new credential selection
-                    try { token = await getToken(); tokenExpiry = Date.now() + 3600000; } catch {}
+                    try { token = await getToken(credId); tokenExpiry = Date.now() + 3600000; } catch {}
                     continue;
                 }
 
@@ -549,7 +551,7 @@ async function processJob(jobId, asinList, selectedMetrics) {
         let retryFound = 0;
 
         // Get fresh token
-        try { token = await getToken(); tokenExpiry = Date.now() + 3600000; } catch { }
+        try { token = await getToken(credId); tokenExpiry = Date.now() + 3600000; } catch { }
 
         for (let i = 0; i < failedAsins.length; i += BATCH_SIZE) {
             const job = await loadJob(jobId);
@@ -563,7 +565,7 @@ async function processJob(jobId, asinList, selectedMetrics) {
                 try {
                     // Refresh token if needed
                     if (Date.now() > tokenExpiry - 120000) {
-                        try { token = await getToken(); tokenExpiry = Date.now() + 3600000; } catch { }
+                        try { token = await getToken(credId); tokenExpiry = Date.now() + 3600000; } catch { }
                     }
                     const apiData = await callCreatorsAPI(token, batch, creds);
                     const items = apiData?.itemsResult?.items || [];
@@ -587,7 +589,7 @@ async function processJob(jobId, asinList, selectedMetrics) {
                     if (status === 429) {
                         const waitMs = err.response?.headers?.['retry-after'] ? parseInt(err.response.headers['retry-after']) * 1000 : RATE_LIMIT_DELAY;
                         await new Promise(r => setTimeout(r, waitMs));
-                        try { token = await getToken(); tokenExpiry = Date.now() + 3600000; } catch { }
+                        try { token = await getToken(credId); tokenExpiry = Date.now() + 3600000; } catch { }
                         continue;
                     }
                     const waitMs = RETRY_DELAYS[attempt] || RETRY_DELAYS[RETRY_DELAYS.length - 1];
@@ -622,3 +624,21 @@ async function processJob(jobId, asinList, selectedMetrics) {
 }
 
 function jobId_safe(id) { return id.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 40); }
+
+// ── V2: Locked to secondary credential only ──────────────────────────
+exports.fetchLiveDataV2 = async (req, res) => {
+    req.body.credId = 'secondary';
+    return exports.fetchLiveData(req, res);
+};
+
+exports.uploadAndProcessV2 = async (req, res) => {
+    req.body._credId = 'secondary';
+    // Inject credId into the job creation
+    const origSaveJob = saveJob;
+    return exports.uploadAndProcess(req, res);
+};
+
+exports.getProgressV2 = (req, res) => exports.getProgress(req, res);
+exports.getResultsV2 = (req, res) => exports.getResults(req, res);
+exports.downloadResultsV2 = (req, res) => exports.downloadResults(req, res);
+exports.cancelJobV2 = (req, res) => exports.cancelJob(req, res);
