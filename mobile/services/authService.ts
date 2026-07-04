@@ -89,11 +89,9 @@ export interface ResendOtpResponse {
 class AuthService {
   /**
    * Request OTP for email-only login.
-   * Falls back to login endpoint if request-otp is not available.
    */
   async requestOtp(email: string): Promise<LoginResponse> {
     try {
-      // Try the dedicated request-otp endpoint first
       const response = await apiClient.post<LoginResponse>(
         API_ENDPOINTS.AUTH.REQUEST_OTP,
         { email }
@@ -101,11 +99,6 @@ class AuthService {
 
       return response as LoginResponse;
     } catch (error) {
-      // If request-otp fails (e.g., not deployed yet), try login with empty password
-      if (error instanceof ApiError && (error.status === 404 || error.status === 401)) {
-        console.log('[AUTH] request-otp not available, falling back to login');
-        return this.login(email, '');
-      }
       throw error;
     }
   }
