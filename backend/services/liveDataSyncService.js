@@ -124,7 +124,7 @@ class LiveDataSyncService extends EventEmitter {
             });
             
             // 3. Get token (global, not per-seller)
-            const token = await this._getToken(creds);
+            const { token } = await this._getToken(creds);
             
             // 4. Process batches SEQUENTIALLY — token bucket = 1 req/sec
             const batches = this._createBatches(allAsins, this._config.maxPerRequest);
@@ -391,15 +391,13 @@ class LiveDataSyncService extends EventEmitter {
     // Internal: Get Token (global, cached)
     // ============================================
     async _getToken(creds) {
-        const credId = creds._credRef?.id || 'default';
-        const cached = this._tokens.get(credId);
-        
-        if (cached && Date.now() < cached.exp) {
-            return cached.t;
-        }
-        
         const CreatorsApiCredentials = require('./creatorsApiCredentials');
         const cred = CreatorsApiCredentials.get();
+        const cached = this._tokens.get(cred.id);
+        
+        if (cached && Date.now() < cached.exp) {
+            return { token: cached.t, credId: cred.id };
+        }
         
         const params = new URLSearchParams();
         params.append('grant_type', 'client_credentials');
@@ -414,11 +412,17 @@ class LiveDataSyncService extends EventEmitter {
         
         this._tokens.set(cred.id, {
             t: response.data.access_token,
-            exp: Date.now() + (response.data.expires_in * 1000) - 60000
+            exp: Date.now() + (response.data.expires_in * 1000) - 120000
         });
         
         CreatorsApiCredentials.markSuccess(cred);
-        return response.data.access_token;
+        return { token: response.data.access_token, credId: cred.id };
+    }
+
+    // Force-rotate: clear all token caches and get a fresh one from a different credential
+    async _rotateToken() {
+        this._tokens.clear();
+        return await this._getToken(null);
     }
     
     // ============================================
@@ -502,28 +506,28 @@ class LiveDataSyncService extends EventEmitter {
                 console.error(`❌ [LiveSync] API ${error.response.status} for batch [${codes?.slice(0, 3).join(', ')}...]: ${body}`);
             }
 
-            // 429: Rate limited — respect Retry-After
+            // 429: Rate limited — rotate to different credential and respect Retry-After
             if (error.response?.status === 429 && retry < this._config.maxRetries) {
                 const retryAfterSec = parseInt(error.response.headers['retry-after'] || '0', 10);
                 const backoff = retryAfterSec > 0
                     ? retryAfterSec * 1000
                     : this._config.retryDelay * Math.pow(2, retry + 1);
-                console.warn(`⏳ [429] Rate limited. Backing off ${(backoff / 1000).toFixed(0)}s (attempt ${retry + 1}/${this._config.maxRetries})`);
+                console.warn(`⏳ [429] Rate limited. Rotating credential, backing off ${(backoff / 1000).toFixed(0)}s (attempt ${retry + 1}/${this._config.maxRetries})`);
                 await this._delay(backoff);
-                return this._processBatch(sellerId, batch, token, creds, stats, retry + 1);
+                const { token: newToken } = await this._rotateToken();
+                CreatorsApiCredentials.markFailed(CreatorsApiCredentials.get(), '429');
+                return this._processBatch(sellerId, batch, newToken, creds, stats, retry + 1);
             }
             
-            // 401: Token expired — refresh and retry
+            // 401: Token expired — rotate credential and retry
             if (error.response?.status === 401 && retry < this._config.maxRetries) {
-                this._tokens.delete('global');
-                const newToken = await this._getToken(creds);
+                const { token: newToken } = await this._rotateToken();
                 return this._processBatch(sellerId, batch, newToken, creds, stats, retry + 1);
             }
             
             // 400: Sometimes means expired token (Amazon quirk)
             if (error.response?.status === 400 && retry < this._config.maxRetries) {
-                this._tokens.delete('global');
-                const newToken = await this._getToken(creds);
+                const { token: newToken } = await this._rotateToken();
                 console.warn(`🔄 [400] Retrying with fresh token (attempt ${retry + 1}/${this._config.maxRetries})`);
                 await this._delay(this._config.retryDelay);
                 return this._processBatch(sellerId, batch, newToken, creds, stats, retry + 1);
