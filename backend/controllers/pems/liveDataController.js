@@ -88,6 +88,19 @@ const API_RESOURCES = [
 const CreatorsApiCredentials = require('../../services/creatorsApiCredentials');
 const TOKEN_CACHE = new Map(); // credId -> { token, expiry }
 
+// Per-credential request queue — serializes API calls so we never exceed rate limits
+const credentialQueues = new Map(); // credId -> Promise chain
+function getQueue(credId = 'default') {
+    if (!credentialQueues.has(credId)) credentialQueues.set(credId, Promise.resolve());
+    return credentialQueues.get(credId);
+}
+function enqueue(credId, fn) {
+    const queue = getQueue(credId);
+    const next = queue.then(() => fn()).catch(() => fn());
+    credentialQueues.set(credId, next);
+    return next;
+}
+
 function getCreds() {
     return {
         pt: process.env.LIVE_SYNC_PARTNER_TAG,
@@ -232,80 +245,88 @@ exports.fetchLiveData = async (req, res) => {
 
         const creds = getCreds();
         const token = await getToken(targetCredId);
+        const queueKey = targetCredId || 'primary';
 
         const BATCH_SIZE = 10;
-        const results = [];
-        const notFound = [];
+        const BATCH_DELAY = 2000; // 2s between batches (was 1.1s — too aggressive)
 
-        for (let i = 0; i < asinList.length; i += BATCH_SIZE) {
-            const batch = asinList.slice(i, i + BATCH_SIZE);
-            try {
-                const apiRes = await axios.post(
-                    'https://creatorsapi.amazon/catalog/v1/getItems',
-                    {
-                        itemIds: batch,
-                        itemIdType: 'ASIN',
-                        marketplace: creds.mk,
-                        partnerTag: creds.pt,
-                        resources: API_RESOURCES,
-                    },
-                    {
-                        headers: {
-                            'Authorization': `Bearer ${token}`,
-                            'Content-Type': 'application/json',
-                            'x-marketplace': creds.mk,
-                        },
-                        timeout: 30000,
-                    }
-                );
+        // Run through queue to prevent concurrent requests on same credential
+        const apiResult = await enqueue(queueKey, async () => {
+            const results = [];
+            const notFound = [];
 
-                const items = apiRes.data?.itemsResult?.items || [];
-                const apiErrors = apiRes.data?.errors || [];
-                const errorMap = new Map();
-                for (const err of apiErrors) {
-                    let asin = err.asin || err.itemId || err.resourceId;
-                    if (!asin && err.message) {
-                        const match = err.message.match(/(?:ItemId|ASIN|Item)\s+(B[A-Z0-9]{9,})/i);
-                        if (match) asin = match[1];
+            for (let i = 0; i < asinList.length; i += BATCH_SIZE) {
+                const batch = asinList.slice(i, i + BATCH_SIZE);
+                let batchOk = false;
+
+                for (let attempt = 0; attempt < 3; attempt++) {
+                    if (batchOk) break;
+                    try {
+                        const apiRes = await axios.post(
+                            'https://creatorsapi.amazon/catalog/v1/getItems',
+                            { itemIds: batch, itemIdType: 'ASIN', marketplace: creds.mk, partnerTag: creds.pt, resources: API_RESOURCES },
+                            { headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', 'x-marketplace': creds.mk }, timeout: 30000 }
+                        );
+
+                        const items = apiRes.data?.itemsResult?.items || [];
+                        const apiErrors = apiRes.data?.errors || [];
+                        const errorMap = new Map();
+                        for (const err of apiErrors) {
+                            let asin = err.asin || err.itemId || err.resourceId;
+                            if (!asin && err.message) { const m = err.message.match(/(?:ItemId|ASIN|Item)\s+(B[A-Z0-9]{9,})/i); if (m) asin = m[1]; }
+                            if (asin) errorMap.set(asin, err.message);
+                        }
+
+                        for (const asinCode of batch) {
+                            const item = items.find(i => i.asin === asinCode);
+                            if (!item) { notFound.push({ asin: asinCode, reason: errorMap.get(asinCode) || 'Not returned' }); continue; }
+                            const row = { asin: asinCode, seller: extractMetricValue('seller', item) };
+                            for (const key of selectedMetrics) row[key] = extractMetricValue(key, item);
+                            results.push(row);
+                        }
+                        batchOk = true;
+                    } catch (batchErr) {
+                        const status = batchErr.response?.status;
+                        if (status === 429) {
+                            const retryAfter = parseInt(batchErr.response?.headers?.['retry-after'] || '0') * 1000;
+                            const waitMs = Math.max(retryAfter, [5000, 15000, 30000][attempt]);
+                            console.log(`[V2] 429 rate limit, attempt ${attempt + 1}/3, waiting ${waitMs / 1000}s...`);
+                            await new Promise(r => setTimeout(r, waitMs));
+                            continue;
+                        }
+                        if (status === 401) {
+                            TOKEN_CACHE.clear();
+                            try { /* token will refresh on retry */ } catch {}
+                            continue;
+                        }
+                        // Network/other errors — backoff
+                        const waitMs = [3000, 8000, 20000][attempt];
+                        await new Promise(r => setTimeout(r, waitMs));
                     }
-                    if (asin) errorMap.set(asin, err.message);
                 }
 
-                for (const asinCode of batch) {
-                    const item = items.find(i => i.asin === asinCode);
-                    if (!item) {
-                        notFound.push({ asin: asinCode, reason: errorMap.get(asinCode) || 'Not returned by API' });
-                        continue;
-                    }
-                    const row = { asin: asinCode, seller: extractMetricValue('seller', item) };
-                    for (const key of selectedMetrics) {
-                        row[key] = extractMetricValue(key, item);
-                    }
-                    results.push(row);
+                if (!batchOk) {
+                    for (const a of batch) notFound.push({ asin: a, reason: 'Failed after retries' });
                 }
 
-                if (i + BATCH_SIZE < asinList.length) {
-                    await new Promise(r => setTimeout(r, 1100));
-                }
-            } catch (batchErr) {
-                console.error('Batch API error:', batchErr.message);
-                for (const asinCode of batch) {
-                    notFound.push({ asin: asinCode, reason: 'API request failed: ' + batchErr.message });
-                }
+                // Delay between batches
+                if (i + BATCH_SIZE < asinList.length) await new Promise(r => setTimeout(r, BATCH_DELAY));
             }
-        }
+
+            return { results, notFound };
+        });
 
         res.json({
             success: true,
-            data: results,
-            total: results.length,
-            notFound: notFound.length > 0 ? notFound : undefined,
+            data: apiResult.results,
+            total: apiResult.results.length,
+            notFound: apiResult.notFound.length > 0 ? apiResult.notFound : undefined,
             metrics: selectedMetrics,
         });
 
-        logActivity('LIVE_DATA_FETCH', `Fetched ${results.length} ASINs (${notFound.length} not found) — metrics: ${selectedMetrics.join(', ')}`, {
-            ip: getClientIp(req), asinCount: asins.length, foundCount: results.length,
-            notFoundCount: notFound.length, metrics: selectedMetrics,
+        logActivity('LIVE_DATA_FETCH', `Fetched ${apiResult.results.length} ASINs (${apiResult.notFound.length} not found) — metrics: ${selectedMetrics.join(', ')}`, {
+            ip: getClientIp(req), asinCount: asins.length, foundCount: apiResult.results.length,
+            notFoundCount: apiResult.notFound.length, metrics: selectedMetrics,
         });
     } catch (err) {
         console.error('Live data fetch error:', err.message);
