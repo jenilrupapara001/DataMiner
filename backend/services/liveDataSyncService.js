@@ -610,14 +610,14 @@ class LiveDataSyncService extends EventEmitter {
                     UPDATE Asins SET
                         Title = @title,
                         ParentAsin = @parentAsin,
-                        CurrentPrice = ISNULL(@currentPrice, CurrentPrice),
-                        Mrp = ISNULL(@mrp, Mrp),
+                        CurrentPrice = @currentPrice,
+                        Mrp = @mrp,
                         Category = @mainCategory,
-                        BSR = ISNULL(@mainBSR, BSR),
-                        SubBSR = ISNULL(@subBSR, SubBSR),
+                        BSR = @mainBSR,
+                        SubBSR = @subBSR,
                         SubBSRCategory = @subBSRCategory,
-                        Rating = ISNULL(@rating, Rating),
-                        ReviewCount = ISNULL(@reviewCount, ReviewCount),
+                        Rating = @rating,
+                        ReviewCount = @reviewCount,
                         ImageUrl = @mainImage,
                         ImagesCount = @imageCount,
                         Images = @imagesJson,
@@ -651,7 +651,7 @@ class LiveDataSyncService extends EventEmitter {
                     WHERE Id = @asinId
                 `);
             
-            // Insert into AsinHistory (use SELECT from Asins to preserve current rating/reviewCount if null)
+            // Insert into AsinHistory
             await new sql.Request(transaction)
                 .input('asinId', sql.VarChar, asinId)
                 .input('price', sql.Decimal(18, 2), extracted.priceAmount)
@@ -665,17 +665,16 @@ class LiveDataSyncService extends EventEmitter {
                     INSERT INTO AsinHistory (
                         AsinId, Date, Price, BSR, SubBSR, Rating, ReviewCount, Source
                     )
-                    SELECT 
+                    VALUES (
                         @asinId, 
                         CAST(dbo.GetEnvDate() AS DATE), 
                         @price, 
                         @bsr, 
                         @subBSR,
-                        ISNULL(@rating, Rating), 
-                        ISNULL(@reviewCount, ReviewCount), 
+                        @rating, 
+                        @reviewCount, 
                         @source
-                    FROM Asins
-                    WHERE Id = @asinId
+                    )
                 `);
             
             await transaction.commit();
