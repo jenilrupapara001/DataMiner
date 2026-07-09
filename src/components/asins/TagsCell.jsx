@@ -143,8 +143,12 @@ const TagsCell = ({ asin, onUpdate, onRefresh }) => {
             return { bg: '#fef2f2', color: '#C62828', border: '#fecaca' };
         if (t.includes('optim') || t.includes('drop') || t.includes('map') || t.includes('inventory') || t.includes('out of stock'))
             return { bg: '#fffbeb', color: '#E65100', border: '#fde68a' };
-        if (t.includes('new') || t.includes('ad active') || t.includes('seasonal') || t.includes('growth') || t.includes('trending'))
+        if (t.includes('new 20') || t.includes('ad active') || t.includes('seasonal') || t.includes('growth') || t.includes('trending'))
             return { bg: '#eff6ff', color: '#0288D1', border: '#bfdbfe' };
+        if (t.includes('gms top 20'))
+            return { bg: '#fffbeb', color: '#d97706', border: '#fcd34d' };
+        if (t.includes('< 60 days'))
+            return { bg: '#ecfdf5', color: '#059669', border: '#a7f3d0' };
         if (t.includes('days') || t.includes('phase') || t.includes('mature') || t.includes('veteran') || t.includes('legacy') || t.includes('established'))
             return { bg: '#f5f3ff', color: '#9C27B0', border: '#ddd6fe' };
         if (t.includes('clearance') || t.includes('replenishment') || t.includes('discontinued'))

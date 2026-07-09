@@ -1140,6 +1140,36 @@ export const asinApi = {
     const url = window.URL.createObjectURL(blob);
     return { success: true, downloadUrl: url };
   },
+
+  getParentView: async (params = {}) => {
+    const cleanParams = Object.entries(params).reduce((acc, [key, val]) => {
+      if (val !== undefined && val !== null && val !== '') acc[key] = val;
+      return acc;
+    }, {});
+    const query = new URLSearchParams(cleanParams).toString();
+    const res = await fetch(`${API_BASE}/asins/parent-view${query ? `?${query}` : ''}`, {
+      headers: { ...getAuthHeader() }
+    });
+    if (!res.ok) throw new Error('Failed to fetch parent view data');
+    return res.json();
+  },
+
+  getParentChildren: async (parentAsin) => {
+    const res = await fetch(`${API_BASE}/asins/parent-view/children/${encodeURIComponent(parentAsin)}`, {
+      headers: { ...getAuthHeader() }
+    });
+    if (!res.ok) throw new Error('Failed to fetch parent children');
+    return res.json();
+  },
+
+  runAutoTags: async () => {
+    const res = await fetch(`${API_BASE}/asins/auto-tags/run`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeader() }
+    });
+    if (!res.ok) throw new Error('Failed to run auto-tags');
+    return res.json();
+  },
 };
 
 

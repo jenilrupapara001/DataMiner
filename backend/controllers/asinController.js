@@ -3420,3 +3420,169 @@ exports.fullExport = async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 };
+
+/**
+ * Get ASINs grouped by Parent ASIN with aggregated GMS data.
+ * GET /api/asins/parent-view
+ * Query params: sellerId, search, sortBy, sortOrder, page, limit
+ */
+exports.getParentView = async (req, res) => {
+  try {
+    const pool = await getPool();
+    const { search, sortBy = 'totalRevenue', sortOrder = 'desc', page = 1, limit = 50 } = req.query;
+
+    // RBAC
+    const roleName = req.user?.role?.Name || req.user?.role?.name || req.user?.role;
+    const isGlobalUser = ['admin', 'super_admin', 'developer', 'operational_manager'].includes(roleName);
+
+    const request = pool.request();
+    let sellerFilter = '';
+
+    if (!isGlobalUser) {
+      const assignedIds = (req.user?.assignedSellers || []).map(s => (s._id || s).toString());
+      if (assignedIds.length === 0) {
+        return res.json({ success: true, data: [], total: 0 });
+      }
+      const ids = assignedIds;
+      sellerFilter = ` AND a.SellerId IN (${ids.map((id, i) => { request.input(`pv_s${i}`, sql.VarChar, id); return `@pv_s${i}`; }).join(',')})`;
+    }
+
+    // Parent ASIN catalog aggregation with GMS data (last 3 months)
+    const parentQuery = `
+      WITH ParentCatalog AS (
+        SELECT
+          a.ParentAsin as parentAsin,
+          MAX(a.Title) as title,
+          MAX(a.Brand) as brand,
+          MAX(a.SellerId) as sellerId,
+          MAX(s.Name) as sellerName,
+          COUNT(DISTINCT a.AsinCode) as childCount,
+          AVG(a.Rating) as avgRating,
+          SUM(ISNULL(a.ReviewCount, 0)) as totalReviews,
+          AVG(a.LQS) as avgLqs,
+          SUM(CASE WHEN a.BuyBoxWin = 1 THEN 1 ELSE 0 END) as buyboxWins,
+          SUM(CASE WHEN a.HasAplus = 1 THEN 1 ELSE 0 END) as withAplus,
+          AVG(a.CurrentPrice) as avgPrice,
+          MIN(a.BSR) as bestBsr
+        FROM Asins a
+        LEFT JOIN Sellers s ON a.SellerId = s.Id
+        WHERE a.ParentAsin IS NOT NULL AND a.ParentAsin <> '' ${sellerFilter}
+          ${search ? `AND (a.ParentAsin LIKE @pv_search OR a.Title LIKE @pv_search OR a.Brand LIKE @pv_search)` : ''}
+        GROUP BY a.ParentAsin
+      ),
+      ParentGms AS (
+        SELECT
+          a.ParentAsin as parentAsin,
+          SUM(ISNULL(g.OrderedRevenue, 0)) as totalRevenue,
+          SUM(ISNULL(g.OrderedUnits, 0)) as totalUnits,
+          SUM(ISNULL(g.ShippedRevenue, 0)) as shippedRevenue,
+          SUM(ISNULL(g.ShippedCOGS, 0)) as shippedCogs,
+          SUM(ISNULL(g.CustomerReturns, 0)) as customerReturns
+        FROM GmsDailyPerformance g
+        INNER JOIN Asins a ON g.Asin = a.AsinCode
+        WHERE a.ParentAsin IS NOT NULL AND a.ParentAsin <> '' ${sellerFilter}
+          ${search ? `AND (a.ParentAsin LIKE @pv_search OR a.Title LIKE @pv_search OR a.Brand LIKE @pv_search)` : ''}
+        GROUP BY a.ParentAsin
+      )
+      SELECT
+        pc.*,
+        ISNULL(pg.totalRevenue, 0) as totalRevenue,
+        ISNULL(pg.totalUnits, 0) as totalUnits,
+        ISNULL(pg.shippedRevenue, 0) as shippedRevenue,
+        ISNULL(pg.shippedCogs, 0) as shippedCogs,
+        ISNULL(pg.customerReturns, 0) as customerReturns
+      FROM ParentCatalog pc
+      LEFT JOIN ParentGms pg ON pc.parentAsin = pg.parentAsin
+    `;
+
+    if (search) {
+      request.input('pv_search', sql.NVarChar, `%${search}%`);
+    }
+
+    const result = await request.query(parentQuery);
+    let parents = result.recordset.map(r => ({
+      ...r,
+      avgRating: r.avgRating ? parseFloat(r.avgRating.toFixed(2)) : 0,
+      avgLqs: r.avgLqs ? parseFloat(r.avgLqs.toFixed(1)) : 0,
+      avgPrice: r.avgPrice ? parseFloat(r.avgPrice.toFixed(2)) : 0,
+      profit: (r.shippedRevenue || 0) - (r.shippedCogs || 0),
+      returnRatio: (r.totalUnits || 0) > 0 ? ((r.customerReturns || 0) / (r.totalUnits || 0) * 100).toFixed(2) : 0,
+    }));
+
+    // Sort
+    const sortField = {
+      totalRevenue: 'totalRevenue', totalUnits: 'totalUnits', childCount: 'childCount',
+      avgRating: 'avgRating', bestBsr: 'bestBsr', avgLqs: 'avgLqs', title: 'title',
+      profit: 'profit',
+    }[sortBy] || 'totalRevenue';
+    const dir = sortOrder === 'asc' ? 1 : -1;
+    parents.sort((a, b) => {
+      const aVal = a[sortField] ?? 0;
+      const bVal = b[sortField] ?? 0;
+      if (typeof aVal === 'string') return aVal.localeCompare(bVal) * dir;
+      return (aVal - bVal) * dir;
+    });
+
+    const total = parents.length;
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const offset = (pageNum - 1) * limitNum;
+    const paged = parents.slice(offset, offset + limitNum);
+
+    res.json({
+      success: true,
+      data: paged,
+      pagination: { page: pageNum, limit: limitNum, total, totalPages: Math.ceil(total / limitNum) }
+    });
+  } catch (error) {
+    console.error('getParentView Error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+/**
+ * Get children ASINs for a specific parent ASIN.
+ * GET /api/asins/parent-view/children/:parentAsin
+ */
+exports.getParentChildren = async (req, res) => {
+  try {
+    const pool = await getPool();
+    const { parentAsin } = req.params;
+
+    const result = await pool.request()
+      .input('parentAsin', sql.NVarChar, parentAsin)
+      .query(`
+        SELECT
+          a.Id, a.AsinCode, a.Title, a.CurrentPrice, a.Mrp, a.BSR,
+          a.Rating, a.ReviewCount, a.LQS, a.Status, a.Sku,
+          a.BuyBoxWin, a.HasAplus, a.SoldBy, a.AvailabilityStatus,
+          a.ImagesCount, a.Tags, a.ReleaseDate, a.UpdatedAt,
+          s.Name as sellerName
+        FROM Asins a
+        LEFT JOIN Sellers s ON a.SellerId = s.Id
+        WHERE a.ParentAsin = @parentAsin
+        ORDER BY a.CurrentPrice ASC
+      `);
+
+    res.json({ success: true, data: result.recordset });
+  } catch (error) {
+    console.error('getParentChildren Error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+/**
+ * Run auto-tag computation for GMS Top 20, New 20, and age tags.
+ * POST /api/asins/auto-tags/run
+ */
+exports.runAutoTags = async (req, res) => {
+  try {
+    const AutoTagService = require('../services/autoTagService');
+    const pool = await getPool();
+    const result = await AutoTagService.runAllAutoTags(pool);
+    res.json({ success: true, data: result });
+  } catch (error) {
+    console.error('runAutoTags Error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};

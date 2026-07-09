@@ -96,8 +96,8 @@ function getQueue(credId = 'default') {
 }
 function enqueue(credId, fn) {
     const queue = getQueue(credId);
-    const next = queue.then(() => fn()).catch(() => fn());
-    credentialQueues.set(credId, next);
+    const next = queue.then(() => fn());
+    credentialQueues.set(credId, next.catch(() => {}));
     return next;
 }
 
@@ -244,30 +244,23 @@ exports.fetchLiveData = async (req, res) => {
             return res.status(500).json({ success: false, error: 'Live Sync credentials not configured on server' });
 
         const creds = getCreds();
-        const token = await getToken(targetCredId);
-        const queueKey = targetCredId || 'primary';
-
         const BATCH_SIZE = 10;
-        const BATCH_DELAY = 2000; // 2s between batches (was 1.1s — too aggressive)
+        const BATCH_DELAY = 1800;
 
-        // Run through queue to prevent concurrent requests on same credential
-        const apiResult = await enqueue(queueKey, async () => {
+        // ── Shared batch processor ───────────────────────────────
+        async function processBatches(token, asins, selectedMetrics) {
             const results = [];
             const notFound = [];
-
-            for (let i = 0; i < asinList.length; i += BATCH_SIZE) {
-                const batch = asinList.slice(i, i + BATCH_SIZE);
+            for (let i = 0; i < asins.length; i += BATCH_SIZE) {
+                const batch = asins.slice(i, i + BATCH_SIZE);
                 let batchOk = false;
-
                 for (let attempt = 0; attempt < 3; attempt++) {
                     if (batchOk) break;
                     try {
-                        const apiRes = await axios.post(
-                            'https://creatorsapi.amazon/catalog/v1/getItems',
+                        const apiRes = await axios.post('https://creatorsapi.amazon/catalog/v1/getItems',
                             { itemIds: batch, itemIdType: 'ASIN', marketplace: creds.mk, partnerTag: creds.pt, resources: API_RESOURCES },
                             { headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', 'x-marketplace': creds.mk }, timeout: 30000 }
                         );
-
                         const items = apiRes.data?.itemsResult?.items || [];
                         const apiErrors = apiRes.data?.errors || [];
                         const errorMap = new Map();
@@ -276,7 +269,6 @@ exports.fetchLiveData = async (req, res) => {
                             if (!asin && err.message) { const m = err.message.match(/(?:ItemId|ASIN|Item)\s+(B[A-Z0-9]{9,})/i); if (m) asin = m[1]; }
                             if (asin) errorMap.set(asin, err.message);
                         }
-
                         for (const asinCode of batch) {
                             const item = items.find(i => i.asin === asinCode);
                             if (!item) { notFound.push({ asin: asinCode, reason: errorMap.get(asinCode) || 'Not returned' }); continue; }
@@ -290,31 +282,47 @@ exports.fetchLiveData = async (req, res) => {
                         if (status === 429) {
                             const retryAfter = parseInt(batchErr.response?.headers?.['retry-after'] || '0') * 1000;
                             const waitMs = Math.max(retryAfter, [5000, 15000, 30000][attempt]);
-                            console.log(`[V2] 429 rate limit, attempt ${attempt + 1}/3, waiting ${waitMs / 1000}s...`);
+                            console.log(`[Inspector] 429 rate limit, attempt ${attempt + 1}/3, waiting ${waitMs / 1000}s...`);
                             await new Promise(r => setTimeout(r, waitMs));
                             continue;
                         }
-                        if (status === 401) {
-                            TOKEN_CACHE.clear();
-                            try { /* token will refresh on retry */ } catch {}
-                            continue;
-                        }
-                        // Network/other errors — backoff
+                        if (status === 401) { TOKEN_CACHE.clear(); continue; }
                         const waitMs = [3000, 8000, 20000][attempt];
                         await new Promise(r => setTimeout(r, waitMs));
                     }
                 }
-
-                if (!batchOk) {
-                    for (const a of batch) notFound.push({ asin: a, reason: 'Failed after retries' });
-                }
-
-                // Delay between batches
-                if (i + BATCH_SIZE < asinList.length) await new Promise(r => setTimeout(r, BATCH_DELAY));
+                if (!batchOk) { for (const a of batch) notFound.push({ asin: a, reason: 'Failed after retries' }); }
+                if (i + BATCH_SIZE < asins.length) await new Promise(r => setTimeout(r, BATCH_DELAY));
             }
-
             return { results, notFound };
-        });
+        }
+
+        // ── Dual-credential: split ASINs across both keys ──────
+        let apiResult;
+        if (CreatorsApiCredentials.count >= 2 && !targetCredId) {
+            // Split ASINs 50/50 and process in parallel using both keys
+            const mid = Math.ceil(asinList.length / 2);
+            const half1 = asinList.slice(0, mid);
+            const half2 = asinList.slice(mid);
+
+            const [token1, token2] = await Promise.all([getToken('primary'), getToken('secondary')]);
+
+            const [r1, r2] = await Promise.all([
+                enqueue('primary', () => processBatches(token1.token, half1, selectedMetrics)),
+                enqueue('secondary', () => processBatches(token2.token, half2, selectedMetrics)),
+            ]);
+
+            apiResult = {
+                results: [...r1.results, ...r2.results],
+                notFound: [...r1.notFound, ...r2.notFound],
+            };
+            console.log(`[Inspector] Dual-key: ${r1.results.length} (primary) + ${r2.results.length} (secondary) = ${apiResult.results.length} total`);
+        } else {
+            // Single key fallback
+            const queueKey = targetCredId || 'primary';
+            const { token } = await getToken(queueKey);
+            apiResult = await enqueue(queueKey, () => processBatches(token, asinList, selectedMetrics));
+        }
 
         res.json({
             success: true,

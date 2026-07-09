@@ -215,6 +215,12 @@ class SchedulerService {
         this.jobs.ageTagRefresh = cron.schedule('0 2 * * *', async () => {
             await this.refreshAgeTags();
         }, cronOptions);
+
+        // 5. Daily Auto-Tag Run: GMS Top 20 + New 20 + Age tags (Every day at 3 AM)
+        this.jobs.autoTags = cron.schedule('0 3 * * *', async () => {
+            await this.runAutoTags();
+        }, cronOptions);
+        console.log(`🔄 [Scheduler] Auto-Tags (GMS Top 20 + New 20) scheduled daily at 3:00 AM`);
     }
 
     async reschedule() {
@@ -344,6 +350,18 @@ class SchedulerService {
             return result;
         } catch (error) {
             console.error('❌ [AutoTag] Refresh failed:', error.message);
+        }
+    }
+
+    async runAutoTags() {
+        try {
+            console.log('🔄 [AutoTag] Starting daily full auto-tag run (GMS Top 20 + New 20 + Age)...');
+            const pool = await getPool();
+            const result = await AutoTagService.runAllAutoTags(pool);
+            console.log(`✅ [AutoTag] Full run complete:`, JSON.stringify(result));
+            return result;
+        } catch (error) {
+            console.error('❌ [AutoTag] Full run failed:', error.message);
         }
     }
 
