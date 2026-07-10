@@ -542,6 +542,7 @@ const AsinManagerPage = (props) => {
   const [reviewTrendExpanded, setReviewTrendExpanded] = useState(false);
   const [imageTrendExpanded, setImageTrendExpanded] = useState(false);
   const [ordersExpanded, setOrdersExpanded] = useState(false);
+  const [gmsRevenueExpanded, setGmsRevenueExpanded] = useState(false);
   const [availableMonths, setAvailableMonths] = useState([]);
 
   const formatMonthHeader = (dateStr) => {
@@ -1187,12 +1188,10 @@ const AsinManagerPage = (props) => {
           currentPrice: p.avgPrice || 0,
           mrp: 0,
           uploadedPrice: 0,
-          totalOrders: p.totalRevenue || 0,
+          totalOrders: 0, // Parent data doesn't have AdsPerformance orders
           hasGms: p.hasGms || false,
           hasAds: p.hasAds || false,
-          monthlyOrders: Object.fromEntries(
-            Object.entries(p.monthlyGms || {}).map(([k, v]) => [k, v.revenue || 0])
-          ),
+          // GMS data stored separately — NOT in monthlyOrders
           monthlyGmsRevenue: p.monthlyGms || {},
           monthlyGmsUnits: Object.fromEntries(
             Object.entries(p.monthlyGms || {}).map(([k, v]) => [k, v.units || 0])
@@ -3253,6 +3252,45 @@ const AsinManagerPage = (props) => {
                     </th>
                   )}
 
+                  {/* GMS Revenue Expandable Monthly Columns */}
+                  {gmsRevenueExpanded && availableMonths.map((month, idx) => (
+                    <th key={`gms-m-${idx}`} style={{
+                      ...thStyle,
+                      ...getTransitionStyle(gmsRevenueExpanded, idx, availableMonths.length + 1, '70px'),
+                      fontSize: 9,
+                      textAlign: 'center',
+                      background: '#ecfdf5',
+                      color: '#065f46'
+                    }}>
+                      <div style={{
+                        width: gmsRevenueExpanded ? 'auto' : '0px',
+                        overflow: 'hidden',
+                        transition: 'all 0.3s ease'
+                      }}>
+                        ₹{month}
+                      </div>
+                    </th>
+                  ))}
+                  {gmsRevenueExpanded && (
+                    <th style={{
+                      ...thStyle,
+                      ...getTransitionStyle(gmsRevenueExpanded, availableMonths.length, availableMonths.length + 1, '70px'),
+                      fontSize: 9,
+                      textAlign: 'center',
+                      background: '#d1fae5',
+                      fontWeight: 800,
+                      color: '#065f46'
+                    }}>
+                      <div style={{
+                        width: gmsRevenueExpanded ? 'auto' : '0px',
+                        overflow: 'hidden',
+                        transition: 'all 0.3s ease'
+                      }}>
+                        GMS TOTAL
+                      </div>
+                    </th>
+                  )}
+
                   {/* Price Trend Dates */}
                   {isVisible('priceTrend') && historyStructure.map(week => (
                     week.dates.map((date, idx) => (
@@ -3783,6 +3821,59 @@ const AsinManagerPage = (props) => {
                               {asin.totalOrders !== undefined && asin.totalOrders > 0 ? (
                                 <span className="fw-bold text-zinc-700" style={{ fontSize: '11px' }}>
                                   {asin.totalOrders.toLocaleString()}
+                                </span>
+                              ) : (
+                                <span className="text-zinc-300" style={{ fontSize: '10px' }}>—</span>
+                              )}
+                            </div>
+                          </td>
+                        )}
+                        {/* GMS Revenue Monthly Cells */}
+                        {gmsRevenueExpanded && availableMonths.map((month, mIdx) => {
+                          const gmsData = asin.monthlyGmsRevenue?.[month] || {};
+                          const monthRevenue = gmsData.revenue || asin.monthlyGmsRevenue?.[month] || 0;
+                          // Handle both flat numbers and objects with .revenue
+                          const revenue = typeof monthRevenue === 'object' ? (monthRevenue.revenue || 0) : monthRevenue;
+                          return (
+                            <td key={`gms-c-${mIdx}`} style={{
+                              ...tdStyle,
+                              ...getTransitionStyle(gmsRevenueExpanded, mIdx, availableMonths.length + 1, '70px'),
+                              textAlign: 'center',
+                              background: '#f0fdf4'
+                            }}>
+                              <div style={{
+                                width: gmsRevenueExpanded ? 'auto' : '0px',
+                                overflow: 'hidden',
+                                transition: 'all 0.3s ease'
+                              }}>
+                                {revenue > 0 ? (
+                                  <span style={{ fontSize: '10px', fontWeight: 600, color: '#059669' }}>
+                                    ₹{revenue.toLocaleString('en-IN')}
+                                  </span>
+                                ) : (
+                                  <span className="text-zinc-300" style={{ fontSize: '10px' }}>—</span>
+                                )}
+                              </div>
+                            </td>
+                          );
+                        })}
+                        {/* GMS Revenue Total Cell */}
+                        {gmsRevenueExpanded && (
+                          <td style={{
+                            ...tdStyle,
+                            ...getTransitionStyle(gmsRevenueExpanded, availableMonths.length, availableMonths.length + 1, '70px'),
+                            textAlign: 'center',
+                            background: '#d1fae5',
+                            fontWeight: 700
+                          }}>
+                            <div style={{
+                              width: 'auto',
+                              overflow: 'hidden',
+                              transition: 'all 0.3s ease'
+                            }}>
+                              {(asin.totalOrders || 0) > 0 ? (
+                                <span className="fw-bold" style={{ fontSize: '11px', color: '#065f46' }}>
+                                  ₹{(asin.totalOrders || 0).toLocaleString('en-IN')}
                                 </span>
                               ) : (
                                 <span className="text-zinc-300" style={{ fontSize: '10px' }}>—</span>

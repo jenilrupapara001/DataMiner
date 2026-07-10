@@ -2,6 +2,8 @@ const { sql, getPool, generateId } = require('../database/db');
 const { buildInClause } = require('../utils/sqlHelpers');
 const marketDataSyncService = require('../services/marketDataSyncService');
 const SystemLogService = require('../services/SystemLogService');
+const emailService = require('../services/emailService');
+const { brandAssigned, brandRemoved } = require('../emails');
 
 // Lightweight in-memory cache registry for sellers to prevent duplicate queries
 const sellerCache = new Map();
@@ -260,263 +262,279 @@ exports.getSellers = async (req, res) => {
     }
 
     try {
-        // Run both enrichments in parallel instead of sequential
-        const [enrichedWithManagers, enrichedWithAsins] = await Promise.all([
-            enrichSellersWithManagers(sellers),
-            enrichSellersWithAsinCounts(sellers)
-        ]);
-        
-        // Merge results - managers first, then asin counts
-        sellers = sellers.map(seller => {
-            const sId = seller._id || seller.Id;
-            const managersData = enrichedWithManagers.find(m => (m._id || m.Id) === sId);
-            const asinsData = enrichedWithAsins.find(a => (a._id || a.Id) === sId);
-            return {
-                ...seller,
-                managers: managersData?.managers || [],
-                totalAsins: asinsData?.totalAsins || 0,
-                activeAsins: asinsData?.activeAsins || 0
-            };
-        });
-        console.log('Enriched managers and asinCounts in parallel');
-    } catch (e) {
-        console.error('Error in enrichment:', e.message);
-        throw e;
-    }
+      // Run both enrichments in parallel instead of sequential
+      const [enrichedWithManagers, enrichedWithAsins] = await Promise.all([
+        enrichSellersWithManagers(sellers),
+        enrichSellersWithAsinCounts(sellers)
+      ]);
 
-      const payload = {
-        sellers,
-        pagination: {
-          page: pageNum,
-          limit: limitNum,
-          total,
-          totalPages: Math.ceil(total / limitNum),
-        },
-      };
-
-      setCachedSellers(cacheKey, payload);
-
-      res.json({
-        success: true,
-        data: payload
-      });
-    } catch (error) {
-      console.error('getSellers error:', error.message);
-      res.status(500).json({ error: error.message });
-    }
-  };
-
-  // Get single seller
-  exports.getSeller = async (req, res) => {
-    try {
-      const { id } = req.params;
-      const roleName = req.user?.role?.name || req.user?.role;
-      const isGlobalUser = ['admin', 'super_admin', 'developer', 'operational_manager'].includes(roleName);
-      const isAssigned = (req.user?.assignedSellers || []).some(s => (s._id || s).toString() === id);
-
-      if (!isGlobalUser && !isAssigned) {
-        return res.status(403).json({ error: 'Unauthorized access to seller profile' });
-      }
-
-      const pool = await getPool();
-      const sellerResult = await pool.request()
-        .input('id', sql.VarChar, id)
-        .query('SELECT * FROM Sellers WHERE Id = @id');
-
-      if (sellerResult.recordset.length === 0) {
-        return res.status(404).json({ error: 'Seller not found' });
-      }
-
-      const seller = sellerResult.recordset[0];
-      const asinsResult = await pool.request()
-        .input('id', sql.VarChar, id)
-        .query('SELECT * FROM Asins WHERE SellerId = @id ORDER BY CreatedAt DESC');
-
-      res.json({
-        seller: {
+      // Merge results - managers first, then asin counts
+      sellers = sellers.map(seller => {
+        const sId = seller._id || seller.Id;
+        const managersData = enrichedWithManagers.find(m => (m._id || m.Id) === sId);
+        const asinsData = enrichedWithAsins.find(a => (a._id || a.Id) === sId);
+        return {
           ...seller,
-          _id: seller.Id,
-          name: seller.Name,
-          marketplace: seller.Marketplace,
-          sellerId: seller.SellerId,
-          status: seller.IsActive ? 'Active' : 'Inactive',
-          isPriority: !!seller.IsPriority,
-          octoparseId: seller.OctoparseId,
-          plan: seller.Plan,
-          scrapeLimit: seller.ScrapeLimit,
-          scrapeUsed: seller.ScrapeUsed,
-          lastScraped: seller.LastScrapedAt,
-          liveSyncClientId: seller.LiveSyncClientId,
-          liveSyncEnabled: !!seller.LiveSyncEnabled
-        },
-        asins: asinsResult.recordset.map(a => ({ ...a, _id: a.Id }))
+          managers: managersData?.managers || [],
+          totalAsins: asinsData?.totalAsins || 0,
+          activeAsins: asinsData?.activeAsins || 0
+        };
       });
-    } catch (error) {
-      res.status(500).json({ error: error.message });
+      console.log('Enriched managers and asinCounts in parallel');
+    } catch (e) {
+      console.error('Error in enrichment:', e.message);
+      throw e;
     }
-  };
 
-  // Create new seller
-  exports.createSeller = async (req, res) => {
-    try {
-      const userRole = req.user?.role?.name || req.user?.role;
-      const isGlobalUser = ['admin', 'super_admin', 'developer', 'operational_manager'].includes(userRole);
-      const isManager = userRole === 'manager' || userRole === 'Brand Manager';
-      const { assignedUserIds, name, marketplace, sellerId, status, isActive, isPriority, liveSyncClientId, liveSyncClientSecret, partnerTag, liveSyncEnabled, email } = req.body;
+    const payload = {
+      sellers,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        totalPages: Math.ceil(total / limitNum),
+      },
+    };
 
-      // Resolve active status from either field
-      const isActiveStatus = status === 'Active' || isActive === true || isActive === 1;
+    setCachedSellers(cacheKey, payload);
 
-      const pool = await getPool();
-      const id = generateId();
+    res.json({
+      success: true,
+      data: payload
+    });
+  } catch (error) {
+    console.error('getSellers error:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+};
 
-      const request = pool.request();
-      request
-        .input('id', sql.VarChar, id)
-        .input('name', sql.NVarChar, name)
-        .input('email', sql.NVarChar, email || '')
-        .input('marketplace', sql.NVarChar, marketplace || 'amazon.in')
-        .input('sellerId', sql.NVarChar, sellerId || null)
-        .input('isActive', sql.Bit, isActiveStatus ? 1 : 0)
-        .input('isPriority', sql.Bit, isPriority === true ? 1 : 0)
-        .input('octoparseId', sql.NVarChar, req.body.octoparseId || null)
-        .input('plan', sql.NVarChar, req.body.plan || 'Starter')
-        .input('scrapeLimit', sql.Int, req.body.scrapeLimit || 100)
-        .input('liveSyncClientId', sql.NVarChar, liveSyncClientId || null)
-        .input('liveSyncClientSecret', sql.NVarChar, liveSyncClientSecret || null)
-        .input('partnerTag', sql.NVarChar, partnerTag || null)
-        .input('liveSyncEnabled', sql.Bit, liveSyncEnabled === true || liveSyncEnabled === 1 ? 1 : 0);
+// Get single seller
+exports.getSeller = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const roleName = req.user?.role?.name || req.user?.role;
+    const isGlobalUser = ['admin', 'super_admin', 'developer', 'operational_manager'].includes(roleName);
+    const isAssigned = (req.user?.assignedSellers || []).some(s => (s._id || s).toString() === id);
 
-      await request.query(`
+    if (!isGlobalUser && !isAssigned) {
+      return res.status(403).json({ error: 'Unauthorized access to seller profile' });
+    }
+
+    const pool = await getPool();
+    const sellerResult = await pool.request()
+      .input('id', sql.VarChar, id)
+      .query('SELECT * FROM Sellers WHERE Id = @id');
+
+    if (sellerResult.recordset.length === 0) {
+      return res.status(404).json({ error: 'Seller not found' });
+    }
+
+    const seller = sellerResult.recordset[0];
+    const asinsResult = await pool.request()
+      .input('id', sql.VarChar, id)
+      .query('SELECT * FROM Asins WHERE SellerId = @id ORDER BY CreatedAt DESC');
+
+    res.json({
+      seller: {
+        ...seller,
+        _id: seller.Id,
+        name: seller.Name,
+        marketplace: seller.Marketplace,
+        sellerId: seller.SellerId,
+        status: seller.IsActive ? 'Active' : 'Inactive',
+        isPriority: !!seller.IsPriority,
+        octoparseId: seller.OctoparseId,
+        plan: seller.Plan,
+        scrapeLimit: seller.ScrapeLimit,
+        scrapeUsed: seller.ScrapeUsed,
+        lastScraped: seller.LastScrapedAt,
+        liveSyncClientId: seller.LiveSyncClientId,
+        liveSyncEnabled: !!seller.LiveSyncEnabled
+      },
+      asins: asinsResult.recordset.map(a => ({ ...a, _id: a.Id }))
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Create new seller
+exports.createSeller = async (req, res) => {
+  try {
+    const userRole = req.user?.role?.name || req.user?.role;
+    const isGlobalUser = ['admin', 'super_admin', 'developer', 'operational_manager'].includes(userRole);
+    const isManager = userRole === 'manager' || userRole === 'Brand Manager';
+    const { assignedUserIds, name, marketplace, sellerId, status, isActive, isPriority, liveSyncClientId, liveSyncClientSecret, partnerTag, liveSyncEnabled, email } = req.body;
+
+    // Resolve active status from either field
+    const isActiveStatus = status === 'Active' || isActive === true || isActive === 1;
+
+    const pool = await getPool();
+    const id = generateId();
+
+    const request = pool.request();
+    request
+      .input('id', sql.VarChar, id)
+      .input('name', sql.NVarChar, name)
+      .input('email', sql.NVarChar, email || '')
+      .input('marketplace', sql.NVarChar, marketplace || 'amazon.in')
+      .input('sellerId', sql.NVarChar, sellerId || null)
+      .input('isActive', sql.Bit, isActiveStatus ? 1 : 0)
+      .input('isPriority', sql.Bit, isPriority === true ? 1 : 0)
+      .input('octoparseId', sql.NVarChar, req.body.octoparseId || null)
+      .input('plan', sql.NVarChar, req.body.plan || 'Starter')
+      .input('scrapeLimit', sql.Int, req.body.scrapeLimit || 100)
+      .input('liveSyncClientId', sql.NVarChar, liveSyncClientId || null)
+      .input('liveSyncClientSecret', sql.NVarChar, liveSyncClientSecret || null)
+      .input('partnerTag', sql.NVarChar, partnerTag || null)
+      .input('liveSyncEnabled', sql.Bit, liveSyncEnabled === true || liveSyncEnabled === 1 ? 1 : 0);
+
+    await request.query(`
         INSERT INTO Sellers (Id, Name, Email, Marketplace, SellerId, IsActive, IsPriority, OctoparseId, [Plan], ScrapeLimit, LiveSyncClientId, LiveSyncClientSecret, PartnerTag, LiveSyncEnabled, CreatedAt, UpdatedAt)
         VALUES (@id, @name, @email, @marketplace, @sellerId, @isActive, @isPriority, @octoparseId, @plan, @scrapeLimit, @liveSyncClientId, @liveSyncClientSecret, @partnerTag, @liveSyncEnabled, dbo.GetEnvDate(), dbo.GetEnvDate())
       `);
 
-      // Assign to users
-      const usersToAssign = assignedUserIds && Array.isArray(assignedUserIds) ? assignedUserIds : [];
-      if (isManager && !usersToAssign.includes(req.user._id)) {
-        usersToAssign.push(req.user._id);
-      }
-
-      if (usersToAssign.length > 0) {
-        for (const uId of usersToAssign) {
-          await pool.request()
-            .input('userId', sql.VarChar, uId.toString())
-            .input('sellerId', sql.VarChar, id)
-            .query('INSERT INTO UserSellers (UserId, SellerId) VALUES (@userId, @sellerId)');
-        }
-      }
-
-      clearSellerCache();
-
-      // Fetch back the full seller with managers for complete response
-      const createdResult = await pool.request()
-        .input('id', sql.VarChar, id)
-        .query('SELECT Id as _id, Name as name, Marketplace as marketplace, SellerId as sellerId, IsActive as status, IsPriority as isPriority, CreatedAt as createdAt, UpdatedAt as updatedAt FROM Sellers WHERE Id = @id');
-
-      const createdSeller = createdResult.recordset[0] || { _id: id, name, marketplace, sellerId, status };
-      createdSeller.status = createdSeller.status ? 'Active' : 'Inactive';
-
-      // Enrich with managers
-      try {
-        const enriched = await enrichSellersWithManagers([createdSeller]);
-        if (enriched.length > 0) {
-          createdSeller.managers = enriched[0].managers || [];
-        }
-      } catch (e) { createdSeller.managers = []; }
-
-      res.status(201).json({ success: true, data: createdSeller });
-
-      // Log Action
-      await SystemLogService.log({
-        type: 'CREATE',
-        entityType: 'SELLER',
-        entityId: id,
-        entityTitle: name,
-        user: req.user?._id || req.userId,
-        description: `Created new seller profile: ${name} (${marketplace})`
-      });
-
-      if (marketplace) {
-        marketDataSyncService.ensureTaskForSeller(id).catch(err => {
-          console.error(`❌ Error during automated task creation for seller ${name}:`, err.message);
-        });
-      }
-    } catch (error) {
-      if (error.message.includes('UNIQUE KEY')) {
-        return res.status(400).json({ error: 'Seller ID already exists' });
-      }
-      res.status(500).json({ error: error.message });
+    // Assign to users
+    const usersToAssign = assignedUserIds && Array.isArray(assignedUserIds) ? assignedUserIds : [];
+    if (isManager && !usersToAssign.includes(req.user._id)) {
+      usersToAssign.push(req.user._id);
     }
-  };
 
-  // Update seller
-  exports.updateSeller = async (req, res) => {
+    if (usersToAssign.length > 0) {
+      // Fetch user details for email notifications
+      const userReq = pool.request();
+      const assignedInClause = buildInClause(userReq, 'assignUser', usersToAssign);
+      const assignedUsersResult = await userReq
+        .query(`SELECT Id, FirstName, LastName, Email FROM Users WHERE Id IN (${assignedInClause})`);
+      const assignedUserDetails = assignedUsersResult.recordset;
+
+      for (const uId of usersToAssign) {
+        await pool.request()
+          .input('userId', sql.VarChar, uId.toString())
+          .input('sellerId', sql.VarChar, id)
+          .query('INSERT INTO UserSellers (UserId, SellerId) VALUES (@userId, @sellerId)');
+      }
+
+      // Send assignment emails to newly assigned users
+      sendManagerAssignmentEmails({
+        addedManagers: assignedUserDetails,
+        removedManagers: [],
+        sellerName: name || 'New Seller',
+        marketplace: marketplace || 'amazon.in',
+        changedBy: `${req.user?.firstName || ''} ${req.user?.lastName || ''}`.trim() || 'Admin'
+      }).catch(err => console.error('[SellerCreate] Email notification failed:', err.message));
+    }
+
+    clearSellerCache();
+
+    // Fetch back the full seller with managers for complete response
+    const createdResult = await pool.request()
+      .input('id', sql.VarChar, id)
+      .query('SELECT Id as _id, Name as name, Marketplace as marketplace, SellerId as sellerId, IsActive as status, IsPriority as isPriority, CreatedAt as createdAt, UpdatedAt as updatedAt FROM Sellers WHERE Id = @id');
+
+    const createdSeller = createdResult.recordset[0] || { _id: id, name, marketplace, sellerId, status };
+    createdSeller.status = createdSeller.status ? 'Active' : 'Inactive';
+
+    // Enrich with managers
     try {
-      const { id } = req.params;
-      const { assignedUserIds, name, marketplace, sellerId, status, isPriority, liveSyncClientId, liveSyncClientSecret, partnerTag, liveSyncEnabled, email } = req.body;
-      const userRole = req.user?.role?.name || req.user?.role;
-      const isGlobalUser = ['admin', 'super_admin', 'developer', 'operational_manager'].includes(userRole);
-
-      const pool = await getPool();
-
-      // Fetch existing seller for partial updates (e.g. status toggle)
-      const currentResult = await pool.request()
-        .input('id', sql.VarChar, id)
-        .query('SELECT * FROM Sellers WHERE Id = @id');
-
-      if (currentResult.recordset.length === 0) {
-        return res.status(404).json({ error: 'Seller not found' });
+      const enriched = await enrichSellersWithManagers([createdSeller]);
+      if (enriched.length > 0) {
+        createdSeller.managers = enriched[0].managers || [];
       }
-      const current = currentResult.recordset[0];
+    } catch (e) { createdSeller.managers = []; }
 
-      // Merge incoming fields with existing database fallbacks
-      const finalName = name !== undefined ? name : current.Name;
-      const finalMarketplace = marketplace !== undefined ? marketplace : current.Marketplace;
-      const finalSellerId = sellerId === undefined ? current.SellerId : (sellerId || null);
+    res.status(201).json({ success: true, data: createdSeller });
 
-      let finalIsActive = current.IsActive;
-      if (status !== undefined) {
-        finalIsActive = status === 'Active' ? 1 : 0;
-      }
+    // Log Action
+    await SystemLogService.log({
+      type: 'CREATE',
+      entityType: 'SELLER',
+      entityId: id,
+      entityTitle: name,
+      user: req.user?._id || req.userId,
+      description: `Created new seller profile: ${name} (${marketplace})`
+    });
 
-      let finalIsPriority = current.IsPriority;
-      if (isPriority !== undefined) {
-        finalIsPriority = isPriority === true ? 1 : 0;
-      }
+    if (marketplace) {
+      marketDataSyncService.ensureTaskForSeller(id).catch(err => {
+        console.error(`❌ Error during automated task creation for seller ${name}:`, err.message);
+      });
+    }
+  } catch (error) {
+    if (error.message.includes('UNIQUE KEY')) {
+      return res.status(400).json({ error: 'Seller ID already exists' });
+    }
+    res.status(500).json({ error: error.message });
+  }
+};
 
-      const finalOctoId = req.body.octoparseId === undefined ? current.OctoparseId : (req.body.octoparseId || null);
-      const finalPlan = req.body.plan === undefined ? current.Plan : (req.body.plan || 'Starter');
-      const finalScrapeLimit = req.body.scrapeLimit === undefined ? current.ScrapeLimit : (parseInt(req.body.scrapeLimit) || 100);
-      const finalLiveSyncClientId = liveSyncClientId === undefined ? current.LiveSyncClientId : (liveSyncClientId || null);
-      const finalLiveSyncClientSecret = liveSyncClientSecret === undefined ? current.LiveSyncClientSecret : (liveSyncClientSecret || null);
-      const finalPartnerTag = partnerTag === undefined ? current.PartnerTag : (partnerTag || null);
+// Update seller
+exports.updateSeller = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { assignedUserIds, name, marketplace, sellerId, status, isPriority, liveSyncClientId, liveSyncClientSecret, partnerTag, liveSyncEnabled, email } = req.body;
+    const userRole = req.user?.role?.name || req.user?.role;
+    const isGlobalUser = ['admin', 'super_admin', 'developer', 'operational_manager'].includes(userRole);
 
-      const finalEmail = email !== undefined ? email : (current.Email || '');
+    const pool = await getPool();
 
-      let finalLiveSyncEnabled = current.LiveSyncEnabled;
-      if (liveSyncEnabled !== undefined) {
-        finalLiveSyncEnabled = liveSyncEnabled === true || liveSyncEnabled === 1 ? 1 : 0;
-      }
+    // Fetch existing seller for partial updates (e.g. status toggle)
+    const currentResult = await pool.request()
+      .input('id', sql.VarChar, id)
+      .query('SELECT * FROM Sellers WHERE Id = @id');
 
-      const request = pool.request();
-      request
-        .input('id', sql.VarChar, id)
-        .input('name', sql.NVarChar, finalName)
-        .input('email', sql.NVarChar, finalEmail)
-        .input('marketplace', sql.NVarChar, finalMarketplace)
-        .input('sellerId', sql.NVarChar, finalSellerId)
-        .input('isActive', sql.Bit, finalIsActive)
-        .input('isPriority', sql.Bit, finalIsPriority)
-        .input('octoparseId', sql.NVarChar, finalOctoId)
-        .input('plan', sql.NVarChar, finalPlan)
-        .input('scrapeLimit', sql.Int, finalScrapeLimit)
-        .input('liveSyncClientId', sql.NVarChar, finalLiveSyncClientId)
-        .input('liveSyncClientSecret', sql.NVarChar, finalLiveSyncClientSecret)
-        .input('partnerTag', sql.NVarChar, finalPartnerTag)
-        .input('liveSyncEnabled', sql.Bit, finalLiveSyncEnabled);
+    if (currentResult.recordset.length === 0) {
+      return res.status(404).json({ error: 'Seller not found' });
+    }
+    const current = currentResult.recordset[0];
 
-      await request.query(`
+    // Merge incoming fields with existing database fallbacks
+    const finalName = name !== undefined ? name : current.Name;
+    const finalMarketplace = marketplace !== undefined ? marketplace : current.Marketplace;
+    const finalSellerId = sellerId === undefined ? current.SellerId : (sellerId || null);
+
+    let finalIsActive = current.IsActive;
+    if (status !== undefined) {
+      finalIsActive = status === 'Active' ? 1 : 0;
+    }
+
+    let finalIsPriority = current.IsPriority;
+    if (isPriority !== undefined) {
+      finalIsPriority = isPriority === true ? 1 : 0;
+    }
+
+    const finalOctoId = req.body.octoparseId === undefined ? current.OctoparseId : (req.body.octoparseId || null);
+    const finalPlan = req.body.plan === undefined ? current.Plan : (req.body.plan || 'Starter');
+    const finalScrapeLimit = req.body.scrapeLimit === undefined ? current.ScrapeLimit : (parseInt(req.body.scrapeLimit) || 100);
+    const finalLiveSyncClientId = liveSyncClientId === undefined ? current.LiveSyncClientId : (liveSyncClientId || null);
+    const finalLiveSyncClientSecret = liveSyncClientSecret === undefined ? current.LiveSyncClientSecret : (liveSyncClientSecret || null);
+    const finalPartnerTag = partnerTag === undefined ? current.PartnerTag : (partnerTag || null);
+
+    const finalEmail = email !== undefined ? email : (current.Email || '');
+
+    let finalLiveSyncEnabled = current.LiveSyncEnabled;
+    if (liveSyncEnabled !== undefined) {
+      finalLiveSyncEnabled = liveSyncEnabled === true || liveSyncEnabled === 1 ? 1 : 0;
+    }
+
+    const request = pool.request();
+    request
+      .input('id', sql.VarChar, id)
+      .input('name', sql.NVarChar, finalName)
+      .input('email', sql.NVarChar, finalEmail)
+      .input('marketplace', sql.NVarChar, finalMarketplace)
+      .input('sellerId', sql.NVarChar, finalSellerId)
+      .input('isActive', sql.Bit, finalIsActive)
+      .input('isPriority', sql.Bit, finalIsPriority)
+      .input('octoparseId', sql.NVarChar, finalOctoId)
+      .input('plan', sql.NVarChar, finalPlan)
+      .input('scrapeLimit', sql.Int, finalScrapeLimit)
+      .input('liveSyncClientId', sql.NVarChar, finalLiveSyncClientId)
+      .input('liveSyncClientSecret', sql.NVarChar, finalLiveSyncClientSecret)
+      .input('partnerTag', sql.NVarChar, finalPartnerTag)
+      .input('liveSyncEnabled', sql.Bit, finalLiveSyncEnabled);
+
+    await request.query(`
         UPDATE Sellers 
         SET Name = @name, Email = @email, Marketplace = @marketplace, SellerId = @sellerId, 
             IsActive = @isActive, IsPriority = @isPriority, OctoparseId = @octoparseId, [Plan] = @plan, 
@@ -526,173 +544,206 @@ exports.getSellers = async (req, res) => {
         WHERE Id = @id
       `);
 
-      // Handle Archiving/Restoring ASINs when Seller status changes
-      if (finalIsActive === 0 && current.IsActive === true) {
-        console.log(`[SELLER PAUSED] Archiving ASINs for seller ${id}`);
-        await pool.request()
-          .input('sellerId', sql.VarChar, id)
-          .query("UPDATE Asins SET Status = 'Archived', UpdatedAt = dbo.GetEnvDate() WHERE SellerId = @sellerId AND (Status IS NULL OR Status != 'Inactive')");
-      } else if (finalIsActive === 1 && current.IsActive === false) {
-        console.log(`[SELLER RESUMED] Un-archiving ASINs for seller ${id}`);
-        await pool.request()
-          .input('sellerId', sql.VarChar, id)
-          .query("UPDATE Asins SET Status = 'Active', UpdatedAt = dbo.GetEnvDate() WHERE SellerId = @sellerId AND Status = 'Archived'");
-      }
+    // Handle Archiving/Restoring ASINs when Seller status changes
+    if (finalIsActive === 0 && current.IsActive === true) {
+      console.log(`[SELLER PAUSED] Archiving ASINs for seller ${id}`);
+      await pool.request()
+        .input('sellerId', sql.VarChar, id)
+        .query("UPDATE Asins SET Status = 'Archived', UpdatedAt = dbo.GetEnvDate() WHERE SellerId = @sellerId AND (Status IS NULL OR Status != 'Inactive')");
+    } else if (finalIsActive === 1 && current.IsActive === false) {
+      console.log(`[SELLER RESUMED] Un-archiving ASINs for seller ${id}`);
+      await pool.request()
+        .input('sellerId', sql.VarChar, id)
+        .query("UPDATE Asins SET Status = 'Active', UpdatedAt = dbo.GetEnvDate() WHERE SellerId = @sellerId AND Status = 'Archived'");
+    }
 
-      if (isGlobalUser && assignedUserIds !== undefined) {
-        // Fetch current managers BEFORE changing them (for change log)
-        const prevManagersResult = await pool.request()
-          .input('sid', sql.VarChar, id)
-          .query(`
+    if (isGlobalUser && assignedUserIds !== undefined) {
+      // Fetch current managers BEFORE changing them (for change log)
+      const prevManagersResult = await pool.request()
+        .input('sid', sql.VarChar, id)
+        .query(`
           SELECT u.Id, u.FirstName, u.LastName, u.Email
           FROM Users u
           JOIN UserSellers us ON u.Id = us.UserId
           WHERE us.SellerId = @sid
         `);
-        const prevManagers = prevManagersResult.recordset;
-        const prevManagerIds = prevManagers.map(m => m.Id);
+      const prevManagers = prevManagersResult.recordset;
+      const prevManagerIds = prevManagers.map(m => m.Id);
 
-        // Apply new manager assignments
-        await pool.request().input('id', sql.VarChar, id).query('DELETE FROM UserSellers WHERE SellerId = @id');
-        if (Array.isArray(assignedUserIds) && assignedUserIds.length > 0) {
-          for (const uId of assignedUserIds) {
-            await pool.request()
-              .input('userId', sql.VarChar, uId)
-              .input('sellerId', sql.VarChar, id)
-              .query('INSERT INTO UserSellers (UserId, SellerId) VALUES (@userId, @sellerId)');
-          }
+      // Apply new manager assignments
+      await pool.request().input('id', sql.VarChar, id).query('DELETE FROM UserSellers WHERE SellerId = @id');
+      if (Array.isArray(assignedUserIds) && assignedUserIds.length > 0) {
+        for (const uId of assignedUserIds) {
+          await pool.request()
+            .input('userId', sql.VarChar, uId)
+            .input('sellerId', sql.VarChar, id)
+            .query('INSERT INTO UserSellers (UserId, SellerId) VALUES (@userId, @sellerId)');
+        }
+      }
+
+      // Detect manager changes and log them
+      const newManagerIds = Array.isArray(assignedUserIds) ? assignedUserIds.map(String) : [];
+      const removed = prevManagers.filter(m => !newManagerIds.includes(String(m.Id)));
+      const added = newManagerIds.filter(id => !prevManagerIds.map(String).includes(String(id)));
+
+      if (removed.length > 0 || added.length > 0) {
+        // Fetch names for newly added managers
+        let addedNames = [];
+        if (added.length > 0) {
+          const userReq = pool.request();
+          const addedInClause = buildInClause(userReq, 'addedUser', added);
+          const addedNamesResult = await userReq
+            .query(`SELECT Id, FirstName, LastName, Email FROM Users WHERE Id IN (${addedInClause})`);
+          addedNames = addedNamesResult.recordset;
         }
 
-        // Detect manager changes and log them
-        const newManagerIds = Array.isArray(assignedUserIds) ? assignedUserIds.map(String) : [];
-        const removed = prevManagers.filter(m => !newManagerIds.includes(String(m.Id)));
-        const added = newManagerIds.filter(id => !prevManagerIds.map(String).includes(String(id)));
+        const removedDesc = removed.map(m => `${m.FirstName} ${m.LastName} (${m.Email})`).join(', ');
+        const addedDesc = addedNames.map(m => `${m.FirstName} ${m.LastName} (${m.Email})`).join(', ');
 
-        if (removed.length > 0 || added.length > 0) {
-          // Fetch names for newly added managers
-          let addedNames = [];
-          if (added.length > 0) {
-            const userReq = pool.request();
-            const addedInClause = buildInClause(userReq, 'addedUser', added);
-            const addedNamesResult = await userReq
-              .query(`SELECT Id, FirstName, LastName, Email FROM Users WHERE Id IN (${addedInClause})`);
-            addedNames = addedNamesResult.recordset;
+        let changeDesc = `Manager assignment changed for seller "${finalName}" (${finalMarketplace}).`;
+        if (removed.length > 0) changeDesc += ` Removed: ${removedDesc}.`;
+        if (added.length > 0) changeDesc += ` Added: ${addedDesc}.`;
+
+        await SystemLogService.log({
+          type: 'MANAGER_CHANGE',
+          entityType: 'SELLER',
+          entityId: id,
+          entityTitle: finalName,
+          user: req.user?._id || req.userId,
+          description: changeDesc,
+          metadata: {
+            previousManagers: prevManagers.map(m => ({ id: m.Id, name: `${m.FirstName} ${m.LastName}`, email: m.Email })),
+            newManagerIds: newManagerIds,
+            removedManagers: removed.map(m => ({ id: m.Id, name: `${m.FirstName} ${m.LastName}`, email: m.Email })),
+            addedManagerIds: added
           }
+        });
 
-          const removedDesc = removed.map(m => `${m.FirstName} ${m.LastName} (${m.Email})`).join(', ');
-          const addedDesc = addedNames.map(m => `${m.FirstName} ${m.LastName} (${m.Email})`).join(', ');
-
-          let changeDesc = `Manager assignment changed for seller "${finalName}" (${finalMarketplace}).`;
-          if (removed.length > 0) changeDesc += ` Removed: ${removedDesc}.`;
-          if (added.length > 0) changeDesc += ` Added: ${addedDesc}.`;
-
-          await SystemLogService.log({
-            type: 'MANAGER_CHANGE',
-            entityType: 'SELLER',
-            entityId: id,
-            entityTitle: finalName,
-            user: req.user?._id || req.userId,
-            description: changeDesc,
-            metadata: {
-              previousManagers: prevManagers.map(m => ({ id: m.Id, name: `${m.FirstName} ${m.LastName}`, email: m.Email })),
-              newManagerIds: newManagerIds,
-              removedManagers: removed.map(m => ({ id: m.Id, name: `${m.FirstName} ${m.LastName}`, email: m.Email })),
-              addedManagerIds: added
-            }
-          });
-        }
-      } else if (!isGlobalUser) {
-        // Non-global users cannot reassign managers — skip manager update block
+        // Send email notifications to added and removed managers
+        sendManagerAssignmentEmails({
+          addedManagers: addedNames,
+          removedManagers: removed,
+          sellerName: finalName,
+          marketplace: finalMarketplace,
+          changedBy: `${req.user?.firstName || ''} ${req.user?.lastName || ''}`.trim() || 'Admin'
+        }).catch(err => console.error('[SellerUpdate] Email notification failed:', err.message));
       }
-
-      clearSellerCache();
-      res.json({ success: true });
-
-      // Log Update
-      await SystemLogService.log({
-        type: 'UPDATE',
-        entityType: 'SELLER',
-        entityId: id,
-        entityTitle: finalName,
-        user: req.user?._id || req.userId,
-        description: `Updated seller profile settings for ${finalName}`
-      });
-    } catch (error) {
-      res.status(500).json({ error: error.message });
+    } else if (!isGlobalUser) {
+      // Non-global users cannot reassign managers — skip manager update block
     }
-  };
 
-  // Delete seller
-  exports.deleteSeller = async (req, res) => {
-    try {
-      const { id } = req.params;
-      if (req.user?.role?.name !== 'admin' && req.user?.role !== 'admin') {
-        return res.status(403).json({ error: 'Only Super Administrators can delete sellers' });
-      }
+    clearSellerCache();
+    res.json({ success: true });
 
-      const pool = await getPool();
+    // Log Update
+    await SystemLogService.log({
+      type: 'UPDATE',
+      entityType: 'SELLER',
+      entityId: id,
+      entityTitle: finalName,
+      user: req.user?._id || req.userId,
+      description: `Updated seller profile settings for ${finalName}`
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
 
-      // 1. Get all ASINs for this seller
-      const asinsResult = await pool.request()
-        .input('id', sql.VarChar, id)
-        .query('SELECT Id FROM Asins WHERE SellerId = @id');
-      const asins = asinsResult.recordset;
-
-      // 2. Cascade delete ASIN-related metrics if there are any
-      if (asins.length > 0) {
-        const asinReq = pool.request();
-        const asinInClause = buildInClause(asinReq, 'asinId', asins.map(a => a.Id));
-
-        // Delete historical metrics
-        await asinReq.query(`DELETE FROM AsinHistory WHERE AsinId IN (${asinInClause})`);
-        await asinReq.query(`DELETE FROM AsinWeekHistory WHERE AsinId IN (${asinInClause})`);
-        await asinReq.query(`DELETE FROM SubBsrHistory WHERE AsinId IN (${asinInClause})`);
-        await asinReq.query(`DELETE FROM RevenueCalculators WHERE AsinId IN (${asinInClause})`);
-      }
-
-      // 3. Delete related Actions
-      await pool.request()
-        .input('id', sql.VarChar, id)
-        .query('DELETE FROM Actions WHERE SellerId = @id');
-
-      // 4. Update OctoTasks
-      await pool.request()
-        .input('id', sql.VarChar, id)
-        .query('UPDATE OctoTasks SET SellerId = NULL, IsAssigned = 0, LastAssignedAt = NULL WHERE SellerId = @id');
-
-      // 5. Delete UserSellers mapping
-      await pool.request()
-        .input('id', sql.VarChar, id)
-        .query('DELETE FROM UserSellers WHERE SellerId = @id');
-
-      // 6. Delete ASINs
-      await pool.request()
-        .input('id', sql.VarChar, id)
-        .query('DELETE FROM Asins WHERE SellerId = @id');
-
-      // 7. Delete Seller itself
-      await pool.request()
-        .input('id', sql.VarChar, id)
-        .query('DELETE FROM Sellers WHERE Id = @id');
-
-      clearSellerCache();
-      res.json({ message: 'Seller deleted successfully' });
-
-      // Log Delete
-      await SystemLogService.log({
-        type: 'DELETE',
-        entityType: 'SELLER',
-        entityId: id,
-        user: req.user?._id || req.userId,
-        description: `Permanently deleted seller and all cascading associations (ID: ${id})`
-      });
-    } catch (error) {
-      res.status(500).json({ error: error.message });
+// Delete seller
+exports.deleteSeller = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (req.user?.role?.name !== 'admin' && req.user?.role !== 'admin') {
+      return res.status(403).json({ error: 'Only Super Administrators can delete sellers' });
     }
-  };
 
-  // Bulk import
-  exports.importSellers = async (req, res) => {
-    // Similar to create, but in a loop. Skipping full implementation for brevity unless requested.
-    res.status(501).json({ error: 'Not implemented for SQL yet' });
-  };
+    const pool = await getPool();
+
+    // 1. Get all ASINs for this seller
+    const asinsResult = await pool.request()
+      .input('id', sql.VarChar, id)
+      .query('SELECT Id FROM Asins WHERE SellerId = @id');
+    const asins = asinsResult.recordset;
+
+    // 2. Cascade delete ASIN-related metrics if there are any
+    if (asins.length > 0) {
+      const asinReq = pool.request();
+      const asinInClause = buildInClause(asinReq, 'asinId', asins.map(a => a.Id));
+
+      // Delete historical metrics
+      await asinReq.query(`DELETE FROM AsinHistory WHERE AsinId IN (${asinInClause})`);
+      await asinReq.query(`DELETE FROM AsinWeekHistory WHERE AsinId IN (${asinInClause})`);
+      await asinReq.query(`DELETE FROM SubBsrHistory WHERE AsinId IN (${asinInClause})`);
+      await asinReq.query(`DELETE FROM RevenueCalculators WHERE AsinId IN (${asinInClause})`);
+    }
+
+    // 3. Delete related Actions
+    await pool.request()
+      .input('id', sql.VarChar, id)
+      .query('DELETE FROM Actions WHERE SellerId = @id');
+
+    // 4. Update OctoTasks
+    await pool.request()
+      .input('id', sql.VarChar, id)
+      .query('UPDATE OctoTasks SET SellerId = NULL, IsAssigned = 0, LastAssignedAt = NULL WHERE SellerId = @id');
+
+    // 5. Delete UserSellers mapping
+    await pool.request()
+      .input('id', sql.VarChar, id)
+      .query('DELETE FROM UserSellers WHERE SellerId = @id');
+
+    // 6. Delete ASINs
+    await pool.request()
+      .input('id', sql.VarChar, id)
+      .query('DELETE FROM Asins WHERE SellerId = @id');
+
+    // 7. Delete Seller itself
+    await pool.request()
+      .input('id', sql.VarChar, id)
+      .query('DELETE FROM Sellers WHERE Id = @id');
+
+    clearSellerCache();
+    res.json({ message: 'Seller deleted successfully' });
+
+    // Log Delete
+    await SystemLogService.log({
+      type: 'DELETE',
+      entityType: 'SELLER',
+      entityId: id,
+      user: req.user?._id || req.userId,
+      description: `Permanently deleted seller and all cascading associations (ID: ${id})`
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Bulk import
+exports.importSellers = async (req, res) => {
+  // Similar to create, but in a loop. Skipping full implementation for brevity unless requested.
+  res.status(501).json({ error: 'Not implemented for SQL yet' });
+};
+
+// ─── Email Notification for Manager Assignment Changes ────────────────────────
+
+function sendManagerAssignmentEmails({ addedManagers = [], removedManagers = [], sellerName, marketplace, changedBy }) {
+  const baseUrl = process.env.APP_URL || process.env.FRONTEND_URL || process.env.DASHBOARD_URL || 'https://data.brandcentral.in';
+
+  for (const manager of addedManagers) {
+    if (!manager.Email) continue;
+    emailService.send({
+      to: manager.Email,
+      subject: `✅ You've been assigned to ${sellerName}`,
+      html: brandAssigned({ userName: `${manager.FirstName} ${manager.LastName}`, sellerName, marketplace, changedBy, baseUrl })
+    }).catch(err => console.error(`[Email] Failed to send assignment to ${manager.Email}:`, err.message));
+  }
+
+  for (const manager of removedManagers) {
+    if (!manager.Email) continue;
+    emailService.send({
+      to: manager.Email,
+      subject: `❌ You've been removed from ${sellerName}`,
+      html: brandRemoved({ userName: `${manager.FirstName} ${manager.LastName}`, sellerName, marketplace, changedBy, baseUrl })
+    }).catch(err => console.error(`[Email] Failed to send removal to ${manager.Email}:`, err.message));
+  }
+}

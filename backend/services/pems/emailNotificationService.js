@@ -1,124 +1,102 @@
 /**
  * PEMS Email Notification Service
- * Sends emails on task events using existing emailService
+ * Sends emails on task events using unified design system
  */
 const { sql, getPool } = require('../../database/db');
 const emailService = require('../emailService');
+const {
+  taskAssigned,
+  taskSubmitted,
+  taskApproved,
+  taskRejected,
+  slaBreach,
+  taskEscalated,
+} = require('../../emails');
 
 const TEMPLATES = {
   TASK_ASSIGNED: (task, assignee) => ({
     subject: `[PEMS] Task Assigned: ${task.Title || task.InstanceCode}`,
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <div style="background: #2563eb; color: white; padding: 16px 24px; border-radius: 8px 8px 0 0;">
-          <h2 style="margin: 0; font-size: 16px;">Task Assigned to You</h2>
-        </div>
-        <div style="background: white; padding: 24px; border: 1px solid #e5e7eb; border-radius: 0 0 8px 8px;">
-          <p>Hi <strong>${assignee?.FirstName || 'Team'}</strong>,</p>
-          <p>You have been assigned a new task:</p>
-          <div style="background: #f8fafc; padding: 12px; border-radius: 6px; border-left: 4px solid #2563eb; margin: 16px 0;">
-            <strong>${task.Title || 'Untitled Task'}</strong><br/>
-            <span style="color: #64748b;">${task.InstanceCode} · ${task.SellerName || ''} · ${task.Department || ''}</span><br/>
-            <span style="color: #94a3b8;">Priority: ${task.Priority || 'MEDIUM'} · Due: ${task.DueDate ? new Date(task.DueDate).toLocaleDateString('en-IN') : 'Not set'}</span>
-          </div>
-          <a href="${process.env.APP_URL || 'http://localhost:5173'}/pems/tasks" style="display: inline-block; background: #2563eb; color: white; padding: 10px 20px; border-radius: 6px; text-decoration: none; font-weight: 600;">View Task</a>
-        </div>
-      </div>`
+    html: taskAssigned({
+      assigneeName: assignee?.FirstName || 'Team',
+      taskTitle: task.Title,
+      taskInstanceCode: task.InstanceCode,
+      assignedBy: task.AssigneeName || 'System',
+      priority: task.Priority,
+      dueDate: task.DueDate,
+      slaHours: task.SLAHours,
+      sellerName: task.SellerName,
+      department: task.Department,
+      taskId: task.Id,
+    }),
   }),
 
   TASK_SUBMITTED: (task, reviewer) => ({
     subject: `[PEMS] Task Submitted for Review: ${task.Title || task.InstanceCode}`,
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <div style="background: #9333ea; color: white; padding: 16px 24px; border-radius: 8px 8px 0 0;">
-          <h2 style="margin: 0; font-size: 16px;">Task Pending Your Review</h2>
-        </div>
-        <div style="background: white; padding: 24px; border: 1px solid #e5e7eb; border-radius: 0 0 8px 8px;">
-          <p>Hi <strong>${reviewer?.FirstName || 'Reviewer'}</strong>,</p>
-          <p>A task has been submitted for your review:</p>
-          <div style="background: #f8fafc; padding: 12px; border-radius: 6px; border-left: 4px solid #9333ea; margin: 16px 0;">
-            <strong>${task.Title || 'Untitled Task'}</strong><br/>
-            <span style="color: #64748b;">${task.InstanceCode} · ${task.SellerName || ''} · ${task.Department || ''}</span><br/>
-            <span style="color: #94a3b8;">Submitted by: ${task.AssigneeName || 'Unknown'} · Achievement: ${task.AchievementPct || 0}%</span>
-          </div>
-          <a href="${process.env.APP_URL || 'http://localhost:5173'}/pems/reviews" style="display: inline-block; background: #9333ea; color: white; padding: 10px 20px; border-radius: 6px; text-decoration: none; font-weight: 600;">Review Task</a>
-        </div>
-      </div>`
+    html: taskSubmitted({
+      reviewerName: reviewer?.FirstName || 'Reviewer',
+      taskTitle: task.Title,
+      taskInstanceCode: task.InstanceCode,
+      submittedBy: task.AssigneeName || 'Unknown',
+      submittedAt: task.CompletedAt || task.UpdatedAt,
+      timeTaken: task.TimeTaken || '-',
+      priority: task.Priority,
+      sellerName: task.SellerName,
+      taskId: task.Id,
+    }),
   }),
 
   TASK_APPROVED: (task, assignee) => ({
     subject: `[PEMS] Task Approved: ${task.Title || task.InstanceCode}`,
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <div style="background: #16a34a; color: white; padding: 16px 24px; border-radius: 8px 8px 0 0;">
-          <h2 style="margin: 0; font-size: 16px;">Task Approved</h2>
-        </div>
-        <div style="background: white; padding: 24px; border: 1px solid #e5e7eb; border-radius: 0 0 8px 8px;">
-          <p>Hi <strong>${assignee?.FirstName || 'Team'}</strong>,</p>
-          <p>Your task has been approved:</p>
-          <div style="background: #f0fdf4; padding: 12px; border-radius: 6px; border-left: 4px solid #16a34a; margin: 16px 0;">
-            <strong>${task.Title || 'Untitled Task'}</strong><br/>
-            <span style="color: #64748b;">${task.InstanceCode} · Achievement: ${task.AchievementPct || 0}%</span>
-          </div>
-        </div>
-      </div>`
+    html: taskApproved({
+      assigneeName: assignee?.FirstName || 'Team',
+      taskTitle: task.Title,
+      taskInstanceCode: task.InstanceCode,
+      approvedBy: task.ReviewerName || 'Reviewer',
+      approvedAt: task.ReviewedAt || task.UpdatedAt,
+      feedback: task.Feedback,
+      taskId: task.Id,
+    }),
   }),
 
   TASK_REJECTED: (task, assignee) => ({
     subject: `[PEMS] Task Rejected: ${task.Title || task.InstanceCode}`,
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <div style="background: #dc2626; color: white; padding: 16px 24px; border-radius: 8px 8px 0 0;">
-          <h2 style="margin: 0; font-size: 16px;">Task Rejected</h2>
-        </div>
-        <div style="background: white; padding: 24px; border: 1px solid #e5e7eb; border-radius: 0 0 8px 8px;">
-          <p>Hi <strong>${assignee?.FirstName || 'Team'}</strong>,</p>
-          <p>Your task has been rejected and requires rework:</p>
-          <div style="background: #fef2f2; padding: 12px; border-radius: 6px; border-left: 4px solid #dc2626; margin: 16px 0;">
-            <strong>${task.Title || 'Untitled Task'}</strong><br/>
-            <span style="color: #64748b;">${task.InstanceCode}</span>
-          </div>
-          <a href="${process.env.APP_URL || 'http://localhost:5173'}/pems/tasks" style="display: inline-block; background: #dc2626; color: white; padding: 10px 20px; border-radius: 6px; text-decoration: none; font-weight: 600;">View & Rework</a>
-        </div>
-      </div>`
+    html: taskRejected({
+      assigneeName: assignee?.FirstName || 'Team',
+      taskTitle: task.Title,
+      taskInstanceCode: task.InstanceCode,
+      reviewedBy: task.ReviewerName || 'Reviewer',
+      reviewedAt: task.ReviewedAt || task.UpdatedAt,
+      feedback: task.Feedback,
+      taskId: task.Id,
+    }),
   }),
 
   SLA_BREACH: (task, assignee) => ({
     subject: `[PEMS] SLA Breached: ${task.Title || task.InstanceCode}`,
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <div style="background: #dc2626; color: white; padding: 16px 24px; border-radius: 8px 8px 0 0;">
-          <h2 style="margin: 0; font-size: 16px;">SLA Breach Alert</h2>
-        </div>
-        <div style="background: white; padding: 24px; border: 1px solid #e5e7eb; border-radius: 0 0 8px 8px;">
-          <p>Hi <strong>${assignee?.FirstName || 'Team'}</strong>,</p>
-          <p>The following task has breached its SLA:</p>
-          <div style="background: #fef2f2; padding: 12px; border-radius: 6px; border-left: 4px solid #dc2626; margin: 16px 0;">
-            <strong>${task.Title || 'Untitled Task'}</strong><br/>
-            <span style="color: #64748b;">${task.InstanceCode} · SLA: ${task.SLAHours}h · Due: ${task.DueDate ? new Date(task.DueDate).toLocaleDateString('en-IN') : 'Past due'}</span>
-          </div>
-          <a href="${process.env.APP_URL || 'http://localhost:5173'}/pems/tasks" style="display: inline-block; background: #dc2626; color: white; padding: 10px 20px; border-radius: 6px; text-decoration: none; font-weight: 600;">Take Action</a>
-        </div>
-      </div>`
+    html: slaBreach({
+      recipientName: assignee?.FirstName || 'Team',
+      taskTitle: task.Title,
+      taskInstanceCode: task.InstanceCode,
+      assigneeName: task.AssigneeName,
+      slaHours: task.SLAHours,
+      overdueBy: task.OverdueBy || '-',
+      priority: task.Priority,
+      taskId: task.Id,
+    }),
   }),
 
   TASK_ESCALATED: (task, manager) => ({
     subject: `[PEMS] Task Escalated: ${task.Title || task.InstanceCode}`,
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <div style="background: #dc2626; color: white; padding: 16px 24px; border-radius: 8px 8px 0 0;">
-          <h2 style="margin: 0; font-size: 16px;">Task Escalated</h2>
-        </div>
-        <div style="background: white; padding: 24px; border: 1px solid #e5e7eb; border-radius: 0 0 8px 8px;">
-          <p>Hi <strong>${manager?.FirstName || 'Manager'}</strong>,</p>
-          <p>A task has been escalated to you:</p>
-          <div style="background: #fef2f2; padding: 12px; border-radius: 6px; border-left: 4px solid #dc2626; margin: 16px 0;">
-            <strong>${task.Title || 'Untitled Task'}</strong><br/>
-            <span style="color: #64748b;">${task.InstanceCode} · ${task.SellerName || ''} · Priority: ${task.Priority}</span>
-          </div>
-          <a href="${process.env.APP_URL || 'http://localhost:5173'}/pems/tasks" style="display: inline-block; background: #dc2626; color: white; padding: 10px 20px; border-radius: 6px; text-decoration: none; font-weight: 600;">Review Escalation</a>
-        </div>
-      </div>`
+    html: taskEscalated({
+      managerName: manager?.FirstName || 'Manager',
+      taskTitle: task.Title,
+      taskInstanceCode: task.InstanceCode,
+      assigneeName: task.AssigneeName,
+      reason: task.EscalationReason || task.Feedback || 'SLA breach',
+      escalatedAt: task.EscalatedAt || task.UpdatedAt,
+      priority: task.Priority,
+      taskId: task.Id,
+    }),
   }),
 };
 
@@ -157,7 +135,7 @@ async function triggerNotification(eventType, task, recipientId, details = {}) {
 
     // Emit socket event for real-time update
     try {
-      const { SocketService } = require('./SocketService');
+      const { SocketService } = require('../SocketService');
       const io = SocketService?.getIo?.();
       if (io) {
         io.emit('pems-notification', { type: eventType, taskId: task.Id, recipientId });

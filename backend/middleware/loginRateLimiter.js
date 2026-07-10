@@ -103,34 +103,16 @@ function getProgressiveDelay(attemptNumber) {
 
 async function sendLockoutEmail(email, clientIp) {
     try {
+        const { accountLockout } = require('../emails');
+        const html = accountLockout({
+            userName: email,
+            ipAddress: clientIp || 'Unknown',
+            timestamp: new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }),
+        });
         await emailService.send({
             to: email,
-            subject: 'Security Alert: Your account has been temporarily locked',
-            html: `
-                <div style="font-family: -apple-system, sans-serif; max-width: 500px; margin: 0 auto; padding: 24px;">
-                    <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 12px; padding: 20px; margin-bottom: 20px;">
-                        <h2 style="color: #991b1b; font-size: 16px; margin: 0 0 8px 0;">⚠️ Account Temporarily Locked</h2>
-                        <p style="color: #7f1d1d; font-size: 13px; margin: 0;">
-                            Your account was locked after multiple failed login attempts.
-                            Access will be restored automatically in <strong>15 minutes</strong>.
-                        </p>
-                    </div>
-                    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; margin-bottom: 20px;">
-                        <p style="color: #475569; font-size: 12px; margin: 0 0 4px 0;"><strong>Details:</strong></p>
-                        <p style="color: #64748b; font-size: 12px; margin: 0;">Time: ${new Date().toUTCString()}</p>
-                        <p style="color: #64748b; font-size: 12px; margin: 0;">IP Address: ${clientIp}</p>
-                    </div>
-                    <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 12px; padding: 16px;">
-                        <p style="color: #1e40af; font-size: 12px; margin: 0;">
-                            <strong>If this wasn't you:</strong> Change your password immediately after the lockout expires.
-                            Contact your administrator if you need immediate access.
-                        </p>
-                    </div>
-                    <p style="color: #94a3b8; font-size: 11px; text-align: center; margin-top: 20px;">
-                        This is an automated security notification from RetailOps.
-                    </p>
-                </div>
-            `
+            subject: '⚠️ Security Alert: Your account has been temporarily locked',
+            html
         });
         console.log(`📧 [LOCKOUT EMAIL] Sent to ${email}`);
     } catch (err) {

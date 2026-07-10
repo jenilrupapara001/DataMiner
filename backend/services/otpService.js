@@ -88,21 +88,27 @@ class OtpService {
   async _sendOtpEmail(email, otp, user, purpose, metadata) {
     try {
       const emailService = require('./emailService');
+      const { otpLogin } = require('../emails');
       const purposeText = { 'LOGIN': 'login to RetailOps', 'PASSWORD_RESET': 'reset your password' }[purpose] || 'continue';
       const source = metadata.source || 'web';
       const isMobile = source === 'mobile';
-      const deviceLabel = isMobile ? 'RetailOps Mobile App' : 'RetailOps Web';
-      const now = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
 
-      const html = isMobile
-        ? this._buildMobileOtpTemplate(otp, user, purposeText, deviceLabel, metadata, now)
-        : this._buildWebOtpTemplate(otp, user, purposeText, deviceLabel, metadata, now);
-
-      const subject = isMobile
-        ? `[RetailOps App] Your Login Code: ${otp.slice(0, 3)}-${otp.slice(3)}`
-        : `[RetailOps] Your Verification Code: ${otp.slice(0, 3)}-${otp.slice(3)}`;
-
-      await emailService.send({ to: email, subject, html });
+      if (isMobile) {
+        // Mobile uses its own branded template
+        const now = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+        const html = this._buildMobileOtpTemplate(otp, user, purposeText, 'RetailOps Mobile App', metadata, now);
+        const subject = `[RetailOps App] Your Login Code: ${otp.slice(0, 3)}-${otp.slice(3)}`;
+        await emailService.send({ to: email, subject, html });
+      } else {
+        // Web uses unified design system
+        const html = otpLogin({
+          userName: user.FirstName || 'there',
+          code: otp,
+          ipAddress: metadata.ipAddress || 'Unknown',
+        });
+        const subject = `[RetailOps] Your Verification Code: ${otp.slice(0, 3)}-${otp.slice(3)}`;
+        await emailService.send({ to: email, subject, html });
+      }
     } catch (e) {
       console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
       console.log(`📧 Email delivery failed: ${e.message}`);
@@ -144,40 +150,6 @@ class OtpService {
         </div>
         <div style="border-top:1px solid #f1f5f9;padding:14px 24px;text-align:center">
           <p style="font-size:10px;color:#94a3b8;margin:0">${now} &bull; RetailOps Security</p>
-        </div>
-      </div></body></html>`;
-  }
-
-  // ── WEB OTP Template ─────────────────────────────────────
-  _buildWebOtpTemplate(otp, user, purposeText, deviceLabel, metadata, now) {
-    return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head><body style="margin:0;padding:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif">
-      <div style="max-width:480px;margin:40px auto;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.06);border:1px solid #e2e8f0">
-        <div style="padding:32px 32px 24px;text-align:center;border-bottom:1px solid #f1f5f9">
-          <div style="width:48px;height:48px;background:#eff6ff;border-radius:12px;margin:0 auto 14px;display:flex;align-items:center;justify-content:center">
-            <span style="font-size:24px">&#128274;</span>
-          </div>
-          <h1 style="font-size:18px;font-weight:700;color:#0f172a;margin:0 0 4px">Verification Code</h1>
-          <p style="font-size:12px;color:#64748b;margin:0">${deviceLabel}</p>
-        </div>
-        <div style="padding:28px 32px">
-          <p style="font-size:14px;color:#334155;margin:0 0 4px">Hi <strong>${user.FirstName || 'there'}</strong>,</p>
-          <p style="font-size:13px;color:#64748b;margin:0 0 20px">You requested to ${purposeText}. Use this code to verify:</p>
-          <div style="background:#f8fafc;border:2px dashed #d4d4d8;border-radius:12px;padding:24px;text-align:center;margin:0 0 20px">
-            <div style="font-size:36px;font-weight:800;letter-spacing:10px;color:#0f172a;font-family:'SF Mono',Consolas,monospace">${otp}</div>
-            <div style="color:#94a3b8;font-size:11px;margin-top:8px">Valid for ${this.OTP_EXPIRY_MINUTES} minutes</div>
-          </div>
-          <div style="background:#f0f9ff;border-left:3px solid #0288d1;padding:12px 16px;border-radius:0 8px 8px 0;margin:0 0 16px">
-            <p style="font-size:12px;color:#0c4a6e;margin:0"><strong>Security note:</strong> Never share this code. RetailOps will never ask for it over phone or chat.</p>
-          </div>
-          <div style="background:#f8fafc;border-radius:10px;padding:12px 16px;margin:0 0 16px">
-            <p style="font-size:11px;color:#64748b;margin:0">Time: ${now} &bull; IP: ${metadata.ipAddress || 'Unknown'}</p>
-          </div>
-          <div style="background:#fef2f2;border-left:3px solid #ef4444;padding:10px 14px;border-radius:0 8px 8px 0">
-            <p style="font-size:11px;color:#991b1b;margin:0;font-weight:500">Didn't request this? Ignore this email. Your account remains secure.</p>
-          </div>
-        </div>
-        <div style="border-top:1px solid #f1f5f9;padding:14px 32px;text-align:center">
-          <p style="font-size:10px;color:#94a3b8;margin:0">RetailOps &bull; Enterprise Retail Operations</p>
         </div>
       </div></body></html>`;
   }

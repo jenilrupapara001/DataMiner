@@ -489,7 +489,7 @@ exports.getAsins = async (req, res) => {
     const histAsinIds3 = buildInClause(histSubBsrReq, 'histAsin', asinIdValues);
     const histAsinCodes = buildInClause(histOrdersReq, 'histCode', asinCodeValues);
 
-    const [dailyHistoryResult, weekHistoryResult, subBsrHistoryResult, monthsResult, monthlyOrdersResult] = await Promise.all([
+    const [dailyHistoryResult, weekHistoryResult, subBsrHistoryResult, monthsResult, monthlyOrdersResult, monthlyGmsRevenueResult] = await Promise.all([
       // [7.1] Daily History
       histDailyReq.query(`
         SELECT AsinId, FORMAT(Date, 'yyyy-MM-dd') as dateStr, Price as price, BSR as bsr, 
@@ -522,14 +522,29 @@ exports.getAsins = async (req, res) => {
         WHERE Date IS NOT NULL
         ORDER BY Month ASC
       `),
-      // [7.5] Monthly orders (from GMS)
+      // [7.5] Monthly orders (from GMS OrderedUnits)
       histOrdersReq.query(`
         SELECT Asin, FORMAT(Date, 'yyyy-MM') as Month, SUM(ISNULL(OrderedUnits, 0)) as Orders
         FROM GmsDailyPerformance WITH (NOLOCK)
         WHERE Asin IN (${histAsinCodes})
         AND Date IS NOT NULL
         GROUP BY Asin, FORMAT(Date, 'yyyy-MM')
-      `)
+      `),
+      // [7.6] Monthly GMS revenue (from GmsDailyPerformance)
+      (() => {
+        const req = pool.request();
+        if (asinCodeValues.length > 0) {
+          const inClause = buildInClause(req, 'gmsRevAsin', asinCodeValues);
+          return req.query(`
+            SELECT Asin, FORMAT(Date, 'yyyy-MM') as Month, SUM(ISNULL(OrderedRevenue, 0)) as Revenue
+            FROM GmsDailyPerformance WITH (NOLOCK)
+            WHERE Asin IN (${inClause})
+            AND Date IS NOT NULL
+            GROUP BY Asin, FORMAT(Date, 'yyyy-MM')
+          `);
+        }
+        return { recordset: [] };
+      })()
     ]);
 
     // Process daily history
@@ -583,6 +598,14 @@ exports.getAsins = async (req, res) => {
       if (!monthlyOrdersMap[r.Asin]) monthlyOrdersMap[r.Asin] = {};
       const monthStr = r.Month instanceof Date ? r.Month.toISOString().split('T')[0] : r.Month;
       monthlyOrdersMap[r.Asin][monthStr] = r.Orders;
+    });
+
+    // Process monthly GMS revenue
+    const monthlyGmsRevenueMap = {};
+    monthlyGmsRevenueResult.recordset.forEach(r => {
+      if (!monthlyGmsRevenueMap[r.Asin]) monthlyGmsRevenueMap[r.Asin] = {};
+      const monthStr = r.Month instanceof Date ? r.Month.toISOString().split('T')[0] : r.Month;
+      monthlyGmsRevenueMap[r.Asin][monthStr] = r.Revenue;
     });
 
     // [8] Process for frontend
@@ -838,6 +861,7 @@ exports.getAsins = async (req, res) => {
             // Advertising orders
             totalOrders: parseInt(a.TotalOrders) || 0,
             monthlyOrders: monthlyOrdersMap[a.AsinCode] || {},
+            monthlyGmsRevenue: monthlyGmsRevenueMap[a.AsinCode] || {},
             
             // Preserve original ID
             _id: a.Id,
@@ -3512,37 +3536,66 @@ exports.getParentView = async (req, res) => {
       LEFT JOIN ParentGms pg ON pc.parentAsin = pg.parentAsin
     `;
 
-    const monthlyQuery = `
-      SELECT
-        a.ParentAsin as parentAsin,
-        CONVERT(varchar(7), g.Date, 120) as monthKey,
-        SUM(ISNULL(g.OrderedRevenue, 0)) as revenue,
-        SUM(ISNULL(g.OrderedUnits, 0)) as units,
-        SUM(ISNULL(g.ShippedRevenue, 0)) as shipped
-      FROM GmsDailyPerformance g
-      INNER JOIN Asins a ON g.Asin = a.AsinCode
-      WHERE a.ParentAsin IS NOT NULL AND a.ParentAsin <> '' ${sellerFilter}
-      GROUP BY a.ParentAsin, CONVERT(varchar(7), g.Date, 120)
-      ORDER BY a.ParentAsin, CONVERT(varchar(7), g.Date, 120)
-    `;
-
     if (search) {
       request.input('pv_search', sql.NVarChar, `%${search}%`);
     }
 
     const result = await request.query(parentQuery);
 
-    // Fetch monthly GMS breakdown separately
-    const monthlyResult = await request.query(monthlyQuery);
+    // Fetch monthly GMS breakdown — needs fresh request for param reuse
     const monthlyMap = {};
-    monthlyResult.recordset.forEach(r => {
-      if (!monthlyMap[r.parentAsin]) monthlyMap[r.parentAsin] = {};
-      monthlyMap[r.parentAsin][r.monthKey] = {
-        revenue: r.revenue || 0,
-        units: r.units || 0,
-        shipped: r.shipped || 0
-      };
-    });
+    const monthlyRequest = pool.request();
+    if (!isGlobalUser) {
+      const assignedIds = (req.user?.assignedSellers || []).map(s => (s._id || s).toString());
+      if (assignedIds.length > 0) {
+        assignedIds.forEach((id, i) => { monthlyRequest.input(`pv_ms${i}`, sql.VarChar, id); });
+        // Adjust monthly query to use new param names
+        const monthlyResult = await monthlyRequest.query(`
+          SELECT
+            a.ParentAsin as parentAsin,
+            CONVERT(varchar(7), g.Date, 120) as monthKey,
+            SUM(ISNULL(g.OrderedRevenue, 0)) as revenue,
+            SUM(ISNULL(g.OrderedUnits, 0)) as units,
+            SUM(ISNULL(g.ShippedRevenue, 0)) as shipped
+          FROM GmsDailyPerformance g
+          INNER JOIN Asins a ON g.Asin = a.AsinCode
+          WHERE a.ParentAsin IS NOT NULL AND a.ParentAsin <> ''
+            AND a.SellerId IN (${assignedIds.map((_, i) => `@pv_ms${i}`).join(',')})
+          GROUP BY a.ParentAsin, CONVERT(varchar(7), g.Date, 120)
+          ORDER BY a.ParentAsin, CONVERT(varchar(7), g.Date, 120)
+        `);
+        monthlyResult.recordset.forEach(r => {
+          if (!monthlyMap[r.parentAsin]) monthlyMap[r.parentAsin] = {};
+          monthlyMap[r.parentAsin][r.monthKey] = {
+            revenue: r.revenue || 0,
+            units: r.units || 0,
+            shipped: r.shipped || 0
+          };
+        });
+      }
+    } else {
+      const monthlyResult = await pool.request().query(`
+        SELECT
+          a.ParentAsin as parentAsin,
+          CONVERT(varchar(7), g.Date, 120) as monthKey,
+          SUM(ISNULL(g.OrderedRevenue, 0)) as revenue,
+          SUM(ISNULL(g.OrderedUnits, 0)) as units,
+          SUM(ISNULL(g.ShippedRevenue, 0)) as shipped
+        FROM GmsDailyPerformance g
+        INNER JOIN Asins a ON g.Asin = a.AsinCode
+        WHERE a.ParentAsin IS NOT NULL AND a.ParentAsin <> ''
+        GROUP BY a.ParentAsin, CONVERT(varchar(7), g.Date, 120)
+        ORDER BY a.ParentAsin, CONVERT(varchar(7), g.Date, 120)
+      `);
+      monthlyResult.recordset.forEach(r => {
+        if (!monthlyMap[r.parentAsin]) monthlyMap[r.parentAsin] = {};
+        monthlyMap[r.parentAsin][r.monthKey] = {
+          revenue: r.revenue || 0,
+          units: r.units || 0,
+          shipped: r.shipped || 0
+        };
+      });
+    }
 
     let parents = result.recordset.map(r => ({
       ...r,
