@@ -715,6 +715,7 @@ exports.getAsins = async (req, res) => {
             releaseDate: a.ReleaseDate || null,
             marketplace: a.sellerMarketplace || '',
             Ads: a.Ads ? 1 : 0,
+            hasGms: (a.TotalOrders || 0) > 0,
             
             // Pricing
             currentPrice: parseFloat(a.CurrentPrice) || 0,
@@ -3447,7 +3448,7 @@ exports.getParentView = async (req, res) => {
       sellerFilter = ` AND a.SellerId IN (${ids.map((id, i) => { request.input(`pv_s${i}`, sql.VarChar, id); return `@pv_s${i}`; }).join(',')})`;
     }
 
-    // Parent ASIN catalog aggregation with GMS data (last 3 months)
+    // Parent ASIN catalog aggregation with GMS + ADS data (last 3 months)
     const parentQuery = `
       WITH ParentCatalog AS (
         SELECT
@@ -3463,7 +3464,8 @@ exports.getParentView = async (req, res) => {
           SUM(CASE WHEN a.BuyBoxWin = 1 THEN 1 ELSE 0 END) as buyboxWins,
           SUM(CASE WHEN a.HasAplus = 1 THEN 1 ELSE 0 END) as withAplus,
           AVG(a.CurrentPrice) as avgPrice,
-          MIN(a.BSR) as bestBsr
+          MIN(a.BSR) as bestBsr,
+          MAX(CASE WHEN a.Ads = 1 OR a.Ads = '1' THEN 1 ELSE 0 END) as hasAds
         FROM Asins a
         LEFT JOIN Sellers s ON a.SellerId = s.Id
         WHERE a.ParentAsin IS NOT NULL AND a.ParentAsin <> '' ${sellerFilter}
@@ -3477,12 +3479,25 @@ exports.getParentView = async (req, res) => {
           SUM(ISNULL(g.OrderedUnits, 0)) as totalUnits,
           SUM(ISNULL(g.ShippedRevenue, 0)) as shippedRevenue,
           SUM(ISNULL(g.ShippedCOGS, 0)) as shippedCogs,
-          SUM(ISNULL(g.CustomerReturns, 0)) as customerReturns
+          SUM(ISNULL(g.CustomerReturns, 0)) as customerReturns,
+          MAX(CASE WHEN g.OrderedRevenue > 0 THEN 1 ELSE 0 END) as hasGms
         FROM GmsDailyPerformance g
         INNER JOIN Asins a ON g.Asin = a.AsinCode
         WHERE a.ParentAsin IS NOT NULL AND a.ParentAsin <> '' ${sellerFilter}
           ${search ? `AND (a.ParentAsin LIKE @pv_search OR a.Title LIKE @pv_search OR a.Brand LIKE @pv_search)` : ''}
         GROUP BY a.ParentAsin
+      ),
+      ParentGmsMonthly AS (
+        SELECT
+          a.ParentAsin as parentAsin,
+          CONVERT(varchar(7), g.Date, 120) as monthKey,
+          SUM(ISNULL(g.OrderedRevenue, 0)) as revenue,
+          SUM(ISNULL(g.OrderedUnits, 0)) as units,
+          SUM(ISNULL(g.ShippedRevenue, 0)) as shipped
+        FROM GmsDailyPerformance g
+        INNER JOIN Asins a ON g.Asin = a.AsinCode
+        WHERE a.ParentAsin IS NOT NULL AND a.ParentAsin <> '' ${sellerFilter}
+        GROUP BY a.ParentAsin, CONVERT(varchar(7), g.Date, 120)
       )
       SELECT
         pc.*,
@@ -3490,9 +3505,25 @@ exports.getParentView = async (req, res) => {
         ISNULL(pg.totalUnits, 0) as totalUnits,
         ISNULL(pg.shippedRevenue, 0) as shippedRevenue,
         ISNULL(pg.shippedCogs, 0) as shippedCogs,
-        ISNULL(pg.customerReturns, 0) as customerReturns
+        ISNULL(pg.customerReturns, 0) as customerReturns,
+        ISNULL(pg.hasGms, 0) as hasGms,
+        pc.hasAds as hasAds
       FROM ParentCatalog pc
       LEFT JOIN ParentGms pg ON pc.parentAsin = pg.parentAsin
+    `;
+
+    const monthlyQuery = `
+      SELECT
+        a.ParentAsin as parentAsin,
+        CONVERT(varchar(7), g.Date, 120) as monthKey,
+        SUM(ISNULL(g.OrderedRevenue, 0)) as revenue,
+        SUM(ISNULL(g.OrderedUnits, 0)) as units,
+        SUM(ISNULL(g.ShippedRevenue, 0)) as shipped
+      FROM GmsDailyPerformance g
+      INNER JOIN Asins a ON g.Asin = a.AsinCode
+      WHERE a.ParentAsin IS NOT NULL AND a.ParentAsin <> '' ${sellerFilter}
+      GROUP BY a.ParentAsin, CONVERT(varchar(7), g.Date, 120)
+      ORDER BY a.ParentAsin, CONVERT(varchar(7), g.Date, 120)
     `;
 
     if (search) {
@@ -3500,6 +3531,19 @@ exports.getParentView = async (req, res) => {
     }
 
     const result = await request.query(parentQuery);
+
+    // Fetch monthly GMS breakdown separately
+    const monthlyResult = await request.query(monthlyQuery);
+    const monthlyMap = {};
+    monthlyResult.recordset.forEach(r => {
+      if (!monthlyMap[r.parentAsin]) monthlyMap[r.parentAsin] = {};
+      monthlyMap[r.parentAsin][r.monthKey] = {
+        revenue: r.revenue || 0,
+        units: r.units || 0,
+        shipped: r.shipped || 0
+      };
+    });
+
     let parents = result.recordset.map(r => ({
       ...r,
       avgRating: r.avgRating ? parseFloat(r.avgRating.toFixed(2)) : 0,
@@ -3507,6 +3551,9 @@ exports.getParentView = async (req, res) => {
       avgPrice: r.avgPrice ? parseFloat(r.avgPrice.toFixed(2)) : 0,
       profit: (r.shippedRevenue || 0) - (r.shippedCogs || 0),
       returnRatio: (r.totalUnits || 0) > 0 ? ((r.customerReturns || 0) / (r.totalUnits || 0) * 100).toFixed(2) : 0,
+      hasGms: !!(r.hasGms),
+      hasAds: !!(r.hasAds),
+      monthlyGms: monthlyMap[r.parentAsin] || {}
     }));
 
     // Sort

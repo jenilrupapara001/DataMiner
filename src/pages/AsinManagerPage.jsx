@@ -612,7 +612,7 @@ const AsinManagerPage = (props) => {
   const [parentData, setParentData] = useState([]);
   const [parentPagination, setParentPagination] = useState({ page: 1, limit: 50, total: 0, totalPages: 0 });
   const [expandedParents, setExpandedParents] = useState(new Set());
-  const [parentChildren, setParentChildren] = useState({}); // { parentAsin: [children] }
+  const [parentChildren, setParentChildren] = useState({});
   const [loadingParent, setLoadingParent] = useState(false);
   const [filters, setFilters] = useState({
     category: '',
@@ -895,7 +895,7 @@ const AsinManagerPage = (props) => {
   };
 
   // Removed client-side filteredAsins useMemo as we now use server-side search
-  const filteredAsins = asins;
+  const filteredAsins = viewMode === 'parent' ? parentData : asins;
 
   // Fetch filter options when seller changes
   useEffect(() => {
@@ -1153,7 +1153,8 @@ const AsinManagerPage = (props) => {
     }
   }, [pagination.limit, selectedSeller, appliedSearchQuery, appliedFilters, marketplaceFilter, sortBy, sortOrder]);
 
-  // Parent View data loading
+  // Parent View data loading — transforms parent data into ASIN-shaped rows
+  // so the SAME table rendering code works for both views
   const loadParentData = useCallback(async (page = 1, limit = 50) => {
     try {
       setLoadingParent(true);
@@ -1166,7 +1167,82 @@ const AsinManagerPage = (props) => {
         limit,
       });
       if (res.success) {
-        setParentData(res.data || []);
+        // Transform parent data into ASIN-shaped rows so the same table works
+        const asinShaped = (res.data || []).map(p => ({
+          _id: p.parentAsin,
+          _isParent: true,
+          asinCode: p.parentAsin,
+          parentAsin: p.parentAsin,
+          title: p.title || '',
+          brand: p.brand || '',
+          sku: '',
+          status: 'Active',
+          sellerName: p.sellerName || '',
+          childCount: p.childCount || 0,
+          // Map GMS data to standard ASIN fields
+          bsr: p.bestBsr || 0,
+          rating: p.avgRating || 0,
+          reviewCount: p.totalReviews || 0,
+          lqs: p.avgLqs || 0,
+          currentPrice: p.avgPrice || 0,
+          mrp: 0,
+          uploadedPrice: 0,
+          totalOrders: p.totalRevenue || 0,
+          hasGms: p.hasGms || false,
+          hasAds: p.hasAds || false,
+          monthlyOrders: Object.fromEntries(
+            Object.entries(p.monthlyGms || {}).map(([k, v]) => [k, v.revenue || 0])
+          ),
+          monthlyGmsRevenue: p.monthlyGms || {},
+          monthlyGmsUnits: Object.fromEntries(
+            Object.entries(p.monthlyGms || {}).map(([k, v]) => [k, v.units || 0])
+          ),
+          // Placeholder fields to prevent undefined errors in existing columns
+          buyBoxWin: p.buyboxWins > 0 ? 1 : 0,
+          hasAplus: p.withAplus > 0 ? 1 : 0,
+          availabilityStatus: '',
+          Tags: '[]',
+          tags: '[]',
+          imageUrl: '',
+          priceDispute: false,
+          dealBadge: '',
+          dealStartTime: null,
+          dealEndTime: null,
+          dealAccessType: null,
+          dealPercentClaimed: null,
+          manufacturer: '',
+          priceType: '',
+          discountPercentage: 0,
+          secondAsp: 0,
+          aspDifference: 0,
+          bsrTrend: '',
+          ratingTrend: '',
+          soldBy: '',
+          soldBySec: '',
+          buyBoxes: [],
+          allOffers: [],
+          history: [],
+          weekHistory: [],
+          subBsrHistory: [],
+          priceTrend: [],
+          bsrTrendHistory: [],
+          ratingTrendHistory: [],
+          reviewTrendHistory: [],
+          imageTrendHistory: [],
+          releaseDate: null,
+          ImagesCount: 0,
+          VideoCount: 0,
+          BulletPoints: 0,
+        }));
+        setParentData(asinShaped);
+        // Extract available months from the GMS monthly data
+        const allMonths = new Set();
+        asinShaped.forEach(a => {
+          if (a.monthlyOrders && typeof a.monthlyOrders === 'object') {
+            Object.keys(a.monthlyOrders).forEach(m => allMonths.add(m));
+          }
+        });
+        setAvailableMonths([...allMonths].sort());
         setParentPagination(res.pagination || { page: 1, limit, total: 0, totalPages: 0 });
       }
     } catch (err) {
@@ -1179,22 +1255,23 @@ const AsinManagerPage = (props) => {
 
   // Toggle parent expand and lazy-load children
   const toggleParentExpand = useCallback(async (parentAsin) => {
+    const key = parentAsin; // _id === parentAsin for parent rows
     setExpandedParents(prev => {
       const next = new Set(prev);
-      if (next.has(parentAsin)) {
-        next.delete(parentAsin);
+      if (next.has(key)) {
+        next.delete(key);
         return next;
       }
-      next.add(parentAsin);
+      next.add(key);
       return next;
     });
 
     // Load children if not already loaded
-    if (!parentChildren[parentAsin]) {
+    if (!parentChildren[key]) {
       try {
-        const res = await asinApi.getParentChildren(parentAsin);
+        const res = await asinApi.getParentChildren(key);
         if (res.success) {
-          setParentChildren(prev => ({ ...prev, [parentAsin]: res.data || [] }));
+          setParentChildren(prev => ({ ...prev, [key]: res.data || [] }));
         }
       } catch (err) {
         console.error('Error fetching parent children:', err);
@@ -2680,6 +2757,30 @@ const AsinManagerPage = (props) => {
                   Sync
                 </Button>
 
+                {hasPermission('asinmanager_manage') && (
+                  <Tooltip title="Auto-tag: GMS Top 20, New 20, Age tags">
+                    <Button
+                      icon={<Sparkles size={14} />}
+                      onClick={async () => {
+                        try {
+                          message.loading({ content: 'Running auto-tags...', key: 'auto-tags' });
+                          const res = await asinApi.runAutoTags();
+                          if (res.success) {
+                            message.success({ content: `Auto-tags complete. GMS Top 20: ${res.data?.gmsTop20?.updated || 0}, New 20: ${res.data?.new20?.updated || 0}`, key: 'auto-tags', duration: 4 });
+                            loadData(pagination.page);
+                          }
+                        } catch (err) {
+                          message.error({ content: 'Auto-tags failed: ' + err.message, key: 'auto-tags', duration: 4 });
+                        }
+                      }}
+                      style={{ height: '32px', fontSize: '11px', fontWeight: 600, borderRadius: '8px' }}
+                      className="d-flex align-items-center gap-2 shadow-sm"
+                    >
+                      Auto Tags
+                    </Button>
+                  </Tooltip>
+                )}
+
                 <Button
                   onClick={() => setFilterPanelOpen(!filterPanelOpen)}
                   type={filterPanelOpen ? 'primary' : 'default'}
@@ -2849,246 +2950,7 @@ const AsinManagerPage = (props) => {
 
           {/* Scrollable Table Container */}
           <div style={{ flex: 1, overflow: 'auto', position: 'relative' }}>
-            {viewMode === 'parent' ? (
-              loadingParent ? (
-                <div className="d-flex justify-content-center align-items-center" style={{ minHeight: 300 }}>
-                  <RefreshCw size={20} className="spin" style={{ color: '#1976D2' }} />
-                  <span className="ms-2 small" style={{ color: '#64748b' }}>Loading parent data...</span>
-                </div>
-              ) : parentData.length === 0 ? (
-                <div className="text-center py-5">
-                  <Package size={32} style={{ color: '#cbd5e1' }} className="mb-2" />
-                  <div className="small" style={{ color: '#94a3b8' }}>No parent ASINs found. Ensure ASINs have Parent ASIN assigned.</div>
-                </div>
-              ) : (
-                <table style={{ width: 'max-content', minWidth: '100%', borderCollapse: 'separate', borderSpacing: 0, tableLayout: 'fixed' }}>
-                  <thead style={{ position: 'sticky', top: 0, zIndex: 20 }}>
-                    <tr>
-                      <th style={{ ...thStyle, width: '40px', left: 0, zIndex: 22, background: '#f8fafc', textAlign: 'center', borderBottom: '2px solid #e2e8f0' }}>
-                        <input type="checkbox" style={{ cursor: 'pointer', width: '14px', height: '14px' }}
-                          checked={selectedIds.size === parentData.length && parentData.length > 0}
-                          onChange={() => {
-                            if (selectedIds.size === parentData.length) {
-                              setSelectedIds(new Set());
-                            } else {
-                              setSelectedIds(new Set(parentData.map(p => p.parentAsin)));
-                            }
-                          }}
-                        />
-                      </th>
-                      <th style={{ ...thStyle, width: '30px', left: '40px', zIndex: 21, background: '#f8fafc', borderRight: '1px solid #e2e8f0', borderBottom: '2px solid #e2e8f0' }} />
-                      <th style={{ ...thStyle, width: '150px', left: '70px', zIndex: 21, background: '#f8fafc', borderRight: '1px solid #e2e8f0', borderBottom: '2px solid #e2e8f0' }}>
-                        {renderSortableHeader('Parent ASIN', 'parentAsin')}
-                      </th>
-                      <th style={{ ...thStyle, width: '130px', borderBottom: '2px solid #e2e8f0' }}>
-                        {renderSortableHeader('Brand', 'brand')}
-                      </th>
-                      <th style={{ ...thStyle, width: '130px', borderBottom: '2px solid #e2e8f0' }}>
-                        {renderSortableHeader('Seller', 'sellerName')}
-                      </th>
-                      <th style={{ ...thStyle, width: '70px', textAlign: 'center', borderBottom: '2px solid #e2e8f0' }}>
-                        {renderSortableHeader('Children', 'childCount')}
-                      </th>
-                      <th style={{ ...thStyle, width: '120px', textAlign: 'right', borderBottom: '2px solid #e2e8f0' }}>
-                        {renderSortableHeader('Revenue (₹)', 'totalRevenue')}
-                      </th>
-                      <th style={{ ...thStyle, width: '90px', textAlign: 'right', borderBottom: '2px solid #e2e8f0' }}>
-                        {renderSortableHeader('Units', 'totalUnits')}
-                      </th>
-                      <th style={{ ...thStyle, width: '100px', textAlign: 'right', borderBottom: '2px solid #e2e8f0' }}>
-                        {renderSortableHeader('Profit (₹)', 'profit')}
-                      </th>
-                      <th style={{ ...thStyle, width: '70px', textAlign: 'right', borderBottom: '2px solid #e2e8f0' }}>
-                        {renderSortableHeader('Returns', 'customerReturns')}
-                      </th>
-                      <th style={{ ...thStyle, width: '80px', textAlign: 'center', borderBottom: '2px solid #e2e8f0' }}>
-                        {renderSortableHeader('Rating', 'avgRating')}
-                      </th>
-                      <th style={{ ...thStyle, width: '90px', textAlign: 'right', borderBottom: '2px solid #e2e8f0' }}>
-                        {renderSortableHeader('Best BSR', 'bestBsr')}
-                      </th>
-                      <th style={{ ...thStyle, width: '70px', textAlign: 'center', borderBottom: '2px solid #e2e8f0' }}>
-                        {renderSortableHeader('LQS', 'avgLqs')}
-                      </th>
-                      <th style={{ ...thStyle, width: '80px', textAlign: 'right', borderBottom: '2px solid #e2e8f0' }}>
-                        {renderSortableHeader('Avg Price', 'avgPrice')}
-                      </th>
-                      <th style={{ ...thStyle, width: '50px', textAlign: 'center', borderBottom: '2px solid #e2e8f0' }}>A+</th>
-                      <th style={{ ...thStyle, width: '60px', textAlign: 'center', borderBottom: '2px solid #e2e8f0' }}>Tags</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {parentData.map((p, idx) => {
-                      const isExpanded = expandedParents.has(p.parentAsin);
-                      const bgColor = selectedIds.has(p.parentAsin) ? '#eff6ff' : idx % 2 === 0 ? '#fff' : '#f9fafb';
-                      const children = parentChildren[p.parentAsin] || [];
-
-                      return (
-                        <React.Fragment key={p.parentAsin || idx}>
-                          <tr style={{ background: bgColor, borderBottom: isExpanded ? 'none' : '1px solid #f1f5f9', cursor: 'pointer', transition: 'background 0.15s' }}
-                            onMouseEnter={(e) => { if (!selectedIds.has(p.parentAsin)) e.currentTarget.style.background = '#f8fafc'; }}
-                            onMouseLeave={(e) => { if (!selectedIds.has(p.parentAsin)) e.currentTarget.style.background = bgColor; }}
-                          >
-                            {/* Checkbox */}
-                            <td style={{ ...tdStyle, width: '40px', position: 'sticky', left: 0, background: bgColor, zIndex: 5, textAlign: 'center', borderBottom: '0.5px solid #e5e7eb' }}>
-                              <input type="checkbox" style={{ cursor: 'pointer', width: '13px', height: '13px' }}
-                                checked={selectedIds.has(p.parentAsin)}
-                                onChange={() => {
-                                  setSelectedIds(prev => {
-                                    const next = new Set(prev);
-                                    next.has(p.parentAsin) ? next.delete(p.parentAsin) : next.add(p.parentAsin);
-                                    return next;
-                                  });
-                                }}
-                              />
-                            </td>
-                            {/* Expand Arrow */}
-                            <td style={{ ...tdStyle, width: '30px', left: '40px', zIndex: 5, background: bgColor, textAlign: 'center', borderBottom: '0.5px solid #e5e7eb' }}>
-                              <span style={{ display: 'inline-block', transition: 'transform 0.2s', transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)', color: '#94a3b8', fontSize: '11px', cursor: 'pointer' }}
-                                onClick={(e) => { e.stopPropagation(); toggleParentExpand(p.parentAsin); }}
-                              >▶</span>
-                            </td>
-                            {/* Parent ASIN */}
-                            <td style={{ ...tdStyle, width: '150px', left: '70px', zIndex: 5, background: bgColor, fontWeight: 600, fontFamily: 'monospace', color: '#1e293b', borderBottom: '0.5px solid #e5e7eb', borderRight: '1px solid #e2e8f0', fontSize: '11px' }}
-                              onClick={() => toggleParentExpand(p.parentAsin)}
-                            >
-                              {p.parentAsin}
-                            </td>
-                            {/* Brand */}
-                            <td style={{ ...tdStyle, width: '130px', borderBottom: '0.5px solid #f1f5f9' }}>
-                              <span style={{ fontSize: '11px' }}>{p.brand || '-'}</span>
-                            </td>
-                            {/* Seller */}
-                            <td style={{ ...tdStyle, width: '130px', borderBottom: '0.5px solid #f1f5f9' }}>
-                              <span style={{ fontSize: '11px' }}>{p.sellerName || '-'}</span>
-                            </td>
-                            {/* Children count */}
-                            <td style={{ ...tdStyle, width: '70px', textAlign: 'center', borderBottom: '0.5px solid #f1f5f9' }}>
-                              <span className="badge" style={{ backgroundColor: '#e0f2fe', color: '#0369a1', fontSize: '10px', fontWeight: 700, borderRadius: '4px', padding: '2px 6px' }}>
-                                {p.childCount || 0}
-                              </span>
-                            </td>
-                            {/* GMS Revenue */}
-                            <td style={{ ...tdStyle, width: '120px', textAlign: 'right', fontWeight: 700, color: '#059669', borderBottom: '0.5px solid #f1f5f9' }}>
-                              ₹{(p.totalRevenue || 0).toLocaleString('en-IN')}
-                            </td>
-                            {/* Units */}
-                            <td style={{ ...tdStyle, width: '90px', textAlign: 'right', borderBottom: '0.5px solid #f1f5f9' }}>
-                              {(p.totalUnits || 0).toLocaleString()}
-                            </td>
-                            {/* Profit */}
-                            <td style={{ ...tdStyle, width: '100px', textAlign: 'right', fontWeight: 600, color: (p.profit || 0) >= 0 ? '#059669' : '#dc2626', borderBottom: '0.5px solid #f1f5f9' }}>
-                              ₹{(p.profit || 0).toLocaleString('en-IN')}
-                            </td>
-                            {/* Returns */}
-                            <td style={{ ...tdStyle, width: '70px', textAlign: 'right', borderBottom: '0.5px solid #f1f5f9' }}>
-                              <span style={{ color: (p.customerReturns || 0) > 0 ? '#dc2626' : '#94a3b8' }}>
-                                {p.customerReturns || 0}
-                              </span>
-                            </td>
-                            {/* Avg Rating */}
-                            <td style={{ ...tdStyle, width: '80px', textAlign: 'center', borderBottom: '0.5px solid #f1f5f9' }}>
-                              <span style={{ fontWeight: 700, color: (p.avgRating || 0) >= 4 ? '#059669' : (p.avgRating || 0) >= 3 ? '#d97706' : '#dc2626', fontSize: '11px' }}>
-                                {(p.avgRating || 0).toFixed(1)}
-                              </span>
-                            </td>
-                            {/* Best BSR */}
-                            <td style={{ ...tdStyle, width: '90px', textAlign: 'right', fontFamily: 'monospace', fontSize: '10px', borderBottom: '0.5px solid #f1f5f9' }}>
-                              {p.bestBsr ? `#${(p.bestBsr).toLocaleString()}` : '-'}
-                            </td>
-                            {/* Avg LQS */}
-                            <td style={{ ...tdStyle, width: '70px', textAlign: 'center', borderBottom: '0.5px solid #f1f5f9' }}>
-                              <span style={{ fontWeight: 700, color: (p.avgLqs || 0) >= 7 ? '#059669' : (p.avgLqs || 0) >= 5 ? '#d97706' : '#dc2626', fontSize: '11px' }}>
-                                {(p.avgLqs || 0).toFixed(1)}
-                              </span>
-                            </td>
-                            {/* Avg Price */}
-                            <td style={{ ...tdStyle, width: '80px', textAlign: 'right', borderBottom: '0.5px solid #f1f5f9' }}>
-                              ₹{(p.avgPrice || 0).toFixed(0)}
-                            </td>
-                            {/* A+ */}
-                            <td style={{ ...tdStyle, width: '50px', textAlign: 'center', borderBottom: '0.5px solid #f1f5f9' }}>
-                              {p.withAplus > 0 ? (
-                                <span className="badge" style={{ backgroundColor: '#dcfce7', color: '#166534', fontSize: '10px', fontWeight: 700, borderRadius: '4px', padding: '2px 5px' }}>{p.withAplus}</span>
-                              ) : <span style={{ color: '#d1d5db', fontSize: '10px' }}>—</span>}
-                            </td>
-                            {/* Tags */}
-                            <td style={{ ...tdStyle, width: '60px', textAlign: 'center', borderBottom: '0.5px solid #f1f5f9' }}>
-                              <span className="badge" style={{ backgroundColor: '#f3e8ff', color: '#7c3aed', fontSize: '9px', fontWeight: 700, borderRadius: '4px', padding: '2px 5px' }}>
-                                {p.childCount || 0} ASINs
-                              </span>
-                            </td>
-                          </tr>
-
-                          {/* Expanded Child Rows */}
-                          {isExpanded && (
-                            <tr>
-                              <td colSpan={16} style={{ padding: 0, background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                                <div style={{ padding: '10px 12px 10px 50px' }}>
-                                  {children.length > 0 ? (
-                                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
-                                      <thead>
-                                        <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
-                                          {['ASIN', 'Title', 'SKU', 'Price', 'MRP', 'BSR', 'Rating', 'Reviews', 'LQS', 'Status', 'BuyBox', 'A+', 'Last Updated'].map(h => (
-                                            <th key={h} style={{ padding: '5px 8px', textAlign: 'left', fontWeight: 700, fontSize: '9px', textTransform: 'uppercase', color: '#94a3b8', letterSpacing: '0.03em' }}>{h}</th>
-                                          ))}
-                                        </tr>
-                                      </thead>
-                                      <tbody>
-                                        {children.map((child, cIdx) => (
-                                          <tr key={child.Id || cIdx} style={{ background: cIdx % 2 === 0 ? '#fff' : '#fafafa', borderBottom: '1px solid #f1f5f9', transition: 'background 0.1s' }}
-                                            onMouseEnter={(e) => e.currentTarget.style.background = '#f0f9ff'}
-                                            onMouseLeave={(e) => e.currentTarget.style.background = cIdx % 2 === 0 ? '#fff' : '#fafafa'}
-                                          >
-                                            <td style={{ padding: '5px 8px', fontFamily: 'monospace', fontWeight: 600, color: '#0f172a', fontSize: '10px' }}>{child.AsinCode}</td>
-                                            <td style={{ padding: '5px 8px', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#374151' }}>{child.Title || '-'}</td>
-                                            <td style={{ padding: '5px 8px', color: '#6b7280' }}>{child.Sku || '-'}</td>
-                                            <td style={{ padding: '5px 8px', textAlign: 'right', fontWeight: 600 }}>₹{(child.CurrentPrice || 0).toLocaleString()}</td>
-                                            <td style={{ padding: '5px 8px', textAlign: 'right', color: '#6b7280' }}>₹{(child.Mrp || 0).toLocaleString()}</td>
-                                            <td style={{ padding: '5px 8px', textAlign: 'right', fontFamily: 'monospace', fontSize: '10px' }}>{child.BSR ? `#${child.BSR.toLocaleString()}` : '-'}</td>
-                                            <td style={{ padding: '5px 8px', textAlign: 'center', color: (child.Rating || 0) >= 4 ? '#059669' : (child.Rating || 0) >= 3 ? '#d97706' : '#dc2626', fontWeight: 600 }}>{child.Rating || '-'}</td>
-                                            <td style={{ padding: '5px 8px', textAlign: 'right' }}>{child.ReviewCount || 0}</td>
-                                            <td style={{ padding: '5px 8px', textAlign: 'center' }}>
-                                              <span style={{ fontWeight: 700, fontSize: '10px', color: (child.LQS || 0) >= 7 ? '#059669' : '#d97706' }}>{child.LQS || '-'}</span>
-                                            </td>
-                                            <td style={{ padding: '5px 8px' }}>
-                                              <span className={`badge ${child.Status === 'Active' ? 'bg-success bg-opacity-10 text-success' : 'bg-secondary bg-opacity-10 text-secondary'}`} style={{ fontSize: '9px', borderRadius: '4px', padding: '2px 5px' }}>
-                                                {child.Status}
-                                              </span>
-                                            </td>
-                                            <td style={{ padding: '5px 8px', textAlign: 'center' }}>
-                                              {child.BuyBoxWin ? <span style={{ color: '#059669', fontWeight: 700, fontSize: '10px' }}>✓</span> : <span style={{ color: '#d1d5db' }}>—</span>}
-                                            </td>
-                                            <td style={{ padding: '5px 8px', textAlign: 'center' }}>
-                                              {child.HasAplus ? <span style={{ color: '#059669', fontWeight: 700, fontSize: '10px' }}>✓</span> : <span style={{ color: '#d1d5db' }}>—</span>}
-                                            </td>
-                                            <td style={{ padding: '5px 8px', color: '#94a3b8', fontSize: '10px' }}>
-                                              {child.UpdatedAt ? new Date(child.UpdatedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' }) : '-'}
-                                            </td>
-                                          </tr>
-                                        ))}
-                                      </tbody>
-                                    </table>
-                                  ) : !parentChildren[p.parentAsin] ? (
-                                    <div className="d-flex align-items-center gap-2 py-2">
-                                      <RefreshCw size={12} className="spin" style={{ color: '#94a3b8' }} />
-                                      <span className="small" style={{ color: '#94a3b8' }}>Loading children...</span>
-                                    </div>
-                                  ) : (
-                                    <div className="small py-2" style={{ color: '#94a3b8' }}>No child ASINs found.</div>
-                                  )}
-                                </div>
-                              </td>
-                            </tr>
-                          )}
-                        </React.Fragment>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              )
-            ) : (
-              <table style={{ width: 'max-content', minWidth: '100%', borderCollapse: 'separate', borderSpacing: 0, tableLayout: 'fixed' }}>
+            <table style={{ width: 'max-content', minWidth: '100%', borderCollapse: 'separate', borderSpacing: 0, tableLayout: 'fixed' }}>
               <thead style={{ position: 'sticky', top: 0, zIndex: 20 }}>
                 <tr>
                   {isVisible('checkbox') && (
@@ -3151,6 +3013,7 @@ const AsinManagerPage = (props) => {
                   {isVisible('availabilityStatus') && <th rowSpan={2} style={{ ...thStyle, width: '100px', textAlign: 'center', background: '#f8fafc', color: '#334155', borderBottom: '2px solid #cbd5e1' }}>AVAILABILITY</th>}
 
                   {isVisible('ads') && <th rowSpan={2} style={{ ...thStyle, width: '60px', textAlign: 'center', background: '#f8fafc', color: '#334155', borderBottom: '2px solid #cbd5e1' }}>ADS</th>}
+                  {isVisible('ads') && <th rowSpan={2} style={{ ...thStyle, width: '50px', textAlign: 'center', background: '#ecfdf5', color: '#065f46', borderBottom: '2px solid #d1fae5' }}>GMS</th>}
                   {visibleOrdersCount > 0 && (
                     <th
                       rowSpan={ordersExpanded ? 1 : 2}
@@ -3868,6 +3731,17 @@ const AsinManagerPage = (props) => {
                             )}
                           </td>
                         )}
+                        {isVisible('ads') && (
+                          <td style={{ ...tdStyle, textAlign: 'center' }}>
+                            {asin.hasGms ? (
+                              <span className="badge d-flex align-items-center justify-content-center gap-1 shadow-sm" style={{ backgroundColor: '#ecfdf5', color: '#065f46', border: '1px solid #a7f3d0', padding: '3px 6px', fontSize: '0.65rem', fontWeight: 800, borderRadius: '4px' }}>
+                                YES
+                              </span>
+                            ) : (
+                              <span className="text-zinc-300" style={{ fontSize: '10px' }}>—</span>
+                            )}
+                          </td>
+                        )}
                         {/* Orders Monthly Cells */}
                         {isVisible('totalOrders') && ordersExpanded && availableMonths.map((month, mIdx) => {
                           const monthOrders = asin.monthlyOrders ? asin.monthlyOrders[month] : 0;
@@ -4463,7 +4337,6 @@ const AsinManagerPage = (props) => {
                   }))}
               </tbody>
             </table>
-            )}
           </div>
 
           {/* [F] Pagination Footer */}

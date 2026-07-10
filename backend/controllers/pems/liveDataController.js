@@ -279,6 +279,7 @@ exports.fetchLiveData = async (req, res) => {
                         batchOk = true;
                     } catch (batchErr) {
                         const status = batchErr.response?.status;
+                        console.log(`[Inspector] API error ${status || batchErr.code || 'unknown'}: ${batchErr.message?.substring(0, 100)}`);
                         if (status === 429) {
                             const retryAfter = parseInt(batchErr.response?.headers?.['retry-after'] || '0') * 1000;
                             const waitMs = Math.max(retryAfter, [5000, 15000, 30000][attempt]);
@@ -300,12 +301,19 @@ exports.fetchLiveData = async (req, res) => {
         // ── Dual-credential: split ASINs across both keys ──────
         let apiResult;
         if (CreatorsApiCredentials.count >= 2 && !targetCredId) {
-            // Split ASINs 50/50 and process in parallel using both keys
             const mid = Math.ceil(asinList.length / 2);
             const half1 = asinList.slice(0, mid);
             const half2 = asinList.slice(mid);
 
-            const [token1, token2] = await Promise.all([getToken('primary'), getToken('secondary')]);
+            let token1, token2;
+            try {
+                [token1, token2] = await Promise.all([getToken('primary'), getToken('secondary')]);
+            } catch (tokenErr) {
+                console.error('[Inspector] Token error:', tokenErr.message);
+                return res.status(500).json({ success: false, error: 'Failed to get API token: ' + tokenErr.message });
+            }
+
+            console.log(`[Inspector] Dual-key: ${half1.length} ASINs → primary, ${half2.length} ASINs → secondary`);
 
             const [r1, r2] = await Promise.all([
                 enqueue('primary', () => processBatches(token1.token, half1, selectedMetrics)),
@@ -316,7 +324,7 @@ exports.fetchLiveData = async (req, res) => {
                 results: [...r1.results, ...r2.results],
                 notFound: [...r1.notFound, ...r2.notFound],
             };
-            console.log(`[Inspector] Dual-key: ${r1.results.length} (primary) + ${r2.results.length} (secondary) = ${apiResult.results.length} total`);
+            console.log(`[Inspector] Dual-key result: ${r1.results.length} (primary) + ${r2.results.length} (secondary) = ${apiResult.results.length} total`);
         } else {
             // Single key fallback
             const queueKey = targetCredId || 'primary';
