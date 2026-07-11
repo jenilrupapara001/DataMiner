@@ -44,7 +44,7 @@ graph TD
 │   └── utils/              # Frontend formatting & UI logic
 ├── public/                 # Static Assets
 └── package.json            # Core Dependencies
-
+```
 ## 🗄️ Database Strategy & Core Schemas
 
 The system utilizes **MongoDB Atlas** with heavy optimization for time-series data (Ads) and relational-like tracking (ASINs).
