@@ -8,43 +8,6 @@ GMS Dashboard Pro is an enterprise-grade **E-commerce Intelligence Platform** ta
 
 ---
 
-## 🏛️ System Architecture
-
-The platform is designed around a **Service-Oriented MERN Stack**, prioritizing data integrity, high-speed aggregations, and automated marketplace synchronization.
-
-### High-Level Ecosystem
-
-```mermaid
-graph TD
-    subgraph "Frontend Layer (React 19)"
-        UI[Pro Dashboard UI] --> Store[Context API / State]
-        Store --> Components[ApexCharts / Tabler Icons]
-    end
-
-    subgraph "API Gateway (Express.js)"
-        API[API Router] --> Middleware[Auth/RBAC Middleware]
-        Middleware --> Controllers[Module Controllers]
-    end
-
-    subgraph "Automation & Intelligence"
-        Controllers --> Sync[Octoparse Sync Service]
-        Sync <--> Jobs[Self-Healing Sync Loops]
-        Controllers --> AI[Perplexity / NVIDIA NIM SDK]
-    end
-
-    subgraph "Persistence Layer"
-        Controllers --> MongoDB[(MongoDB Atlas)]
-        MongoDB --> Models[Mongoose Schema Layer]
-    end
-│   ├── components/         # Premium UI Component Library
-│   ├── contexts/           # Global State Management
-│   ├── hooks/              # Reusable Logic (API, UI)
-│   ├── pages/              # Module-Specific Views
-│   ├── styles/             # Zinc Design System Utilities
-│   └── utils/              # Frontend formatting & UI logic
-├── public/                 # Static Assets
-└── package.json            # Core Dependencies
-```
 ## 🗄️ Database Strategy & Core Schemas
 
 The system utilizes **MongoDB Atlas** with heavy optimization for time-series data (Ads) and relational-like tracking (ASINs).
